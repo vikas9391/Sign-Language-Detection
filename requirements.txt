@@ -1,0 +1,17 @@
+Flask
+Flask-Login
+Flask-WTF
+Flask-Migrate
+Flask-SQLAlchemy
+SQLAlchemy
+PyMySQL
+opencv-python
+mediapipe
+numpy
+keras
+tensorflow-cpu
+werkzeug
+python-dotenv
+gunicorn
+typing-extensions
+

@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+
+{% block title %}Practice Detection - SignDetect{% endblock %}
+
+{% block extra_css %}
+<style>
+  #videoContainer {
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.3);
+    min-height: 450px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #video {
+    border-radius: 12px;
+    max-width: 100%;
+    height: auto;
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+  }
+
+  .spinner-border {
+    width: 4rem;
+    height: 4rem;
+    border-width: 0.4rem;
+    color: var(--primary-color) !important;
+  }
+
+  .btn-outline-secondary,
+  .btn-outline-primary {
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    background: transparent;
+  }
+
+  .btn-outline-secondary:hover,
+  .btn-outline-primary:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+  }
+
+  #detectedLabel {
+    font-size: 1.3rem;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 2px;
+    color: var(--success-color);
+  }
+
+  .stats-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border: 2px solid var(--primary-color);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+  }
+
+  .stats-card h3 {
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .stats-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+  }
+
+  .sentence-builder {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+    border: 2px solid var(--success-color);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-top: 1rem;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sentence-text {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--success-color);
+    text-align: center;
+    letter-spacing: 2px;
+    word-break: break-all;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .action-buttons button {
+    flex: 1;
+  }
+
+  .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    animation: blink 1.5s infinite;
+  }
+
+  .status-active {
+    background-color: var(--success-color);
+    box-shadow: 0 0 10px var(--success-color);
+  }
+
+  .status-inactive {
+    background-color: var(--text-secondary);
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @media (max-width: 992px) {
+    #videoContainer {
+      min-height: 300px;
+    }
+    
+    .sentence-text {
+      font-size: 1.2rem;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <div class="row g-4 align-items-stretch">
+    <!-- Video Feed -->
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header">
+          <span class="status-indicator status-inactive" id="statusIndicator"></span>
+          Live Detection Feed
+        </div>
+        <div class="card-body text-center">
+          <div id="videoContainer">
+            <div id="spinner" class="spinner-border" role="status">
+              <span class="visually-hidden">Loading camera...</span>
+            </div>
+            <img id="video" class="img-fluid d-none" alt="video feed" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detection Panel -->
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header">Detection Results</div>
+        <div class="card-body">
+          <!-- Current Detection -->
+          <div class="mb-3">
+            <label class="form-label">🎯 Current Sign Detected</label>
+            <input id="detectedLabel" class="form-control" type="text" readonly placeholder="No sign detected" />
+          </div>
+
+          <!-- Stats -->
+          <div class="row mb-3">
+            <div class="col-6">
+              <div class="stats-card">
+                <h3 id="detectionCount">0</h3>
+                <p>Detections</p>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="stats-card">
+                <h3 id="confidenceAvg">0%</h3>
+                <p>Avg Confidence</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sentence Builder -->
+          <div class="mb-3">
+            <label class="form-label">📝 Built Sentence</label>
+            <div class="sentence-builder">
+              <div class="sentence-text" id="sentenceText">Start signing to build a sentence...</div>
+            </div>
+          </div>
+
+          <!-- Control Buttons -->
+          <button id="startBtn" class="btn btn-primary w-100 mb-2">
+            ▶️ Start Detection
+          </button>
+          <button id="stopBtn" class="btn btn-danger w-100 mb-2 d-none">
+            ⏹️ Stop Detection
+          </button>
+          
+          <!-- Action Buttons -->
+          <div class="action-buttons">
+            <button id="clearBtn" class="btn btn-outline-secondary" disabled>
+              Clear
+            </button>
+            <button id="spaceBtn" class="btn btn-outline-primary" disabled>
+              Space
+            </button>
+            <button id="speakBtn" class="btn btn-success" disabled>
+              Speak
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Elements
+  const videoElement = document.getElementById('video');
+  const spinner = document.getElementById('spinner');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const detectedLabel = document.getElementById('detectedLabel');
+  const statusIndicator = document.getElementById('statusIndicator');
+  const sentenceText = document.getElementById('sentenceText');
+  const clearBtn = document.getElementById('clearBtn');
+  const spaceBtn = document.getElementById('spaceBtn');
+  const speakBtn = document.getElementById('speakBtn');
+  const detectionCount = document.getElementById('detectionCount');
+  const confidenceAvg = document.getElementById('confidenceAvg');
+
+  let detectionActive = false;
+  let pollInterval;
+  let sentence = '';
+  let lastDetected = '';
+  let lastAddedToSentence = '';
+  let totalDetections = 0;
+  let totalConfidence = 0;
+
+  // Video load handlers
+  videoElement.onload = function() {
+    spinner.classList.add('d-none');
+    videoElement.classList.remove('d-none');
+    console.log('✅ Video feed loaded successfully');
+  };
+
+  videoElement.onerror = function() {
+    spinner.classList.add('d-none');
+    showCustomAlert('⚠️ Failed to load camera feed. Please check if camera is available and permissions are granted.', 'danger');
+  };
+
+  // Start detection
+  startBtn.addEventListener('click', function() {
+    console.log('🚀 Starting detection...');
+    videoElement.src = '{{ url_for("detection.video_feed") }}';
+    detectionActive = true;
+    startBtn.classList.add('d-none');
+    stopBtn.classList.remove('d-none');
+    statusIndicator.classList.remove('status-inactive');
+    statusIndicator.classList.add('status-active');
+    clearBtn.disabled = false;
+    spaceBtn.disabled = false;
+    speakBtn.disabled = false;
+    
+    showCustomAlert('✅ Detection started! Show your ASL signs to the camera.', 'success');
+    
+    // Poll more frequently for better responsiveness
+    pollInterval = setInterval(fetchLatestLabel, 300);  // Reduced from 500ms
+  });
+
+  // Stop detection
+  stopBtn.addEventListener('click', function() {
+    console.log('🛑 Stopping detection...');
+    videoElement.src = '';
+    videoElement.classList.add('d-none');
+    spinner.classList.remove('d-none');
+    detectionActive = false;
+    startBtn.classList.remove('d-none');
+    stopBtn.classList.add('d-none');
+    statusIndicator.classList.remove('status-active');
+    statusIndicator.classList.add('status-inactive');
+    clearBtn.disabled = true;
+    spaceBtn.disabled = true;
+    speakBtn.disabled = true;
+    
+    showCustomAlert('🛑 Detection stopped. Click "Start Detection" to resume.', 'warning');
+    
+    if (pollInterval) clearInterval(pollInterval);
+  });
+
+  // Fetch latest detected label
+  async function fetchLatestLabel() {
+    if (!detectionActive) return;
+    
+    try {
+      const response = await fetch('{{ url_for("detection.get_label") }}');
+      
+      if (!response.ok) {
+        console.error('❌ Failed to fetch label:', response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      
+      console.log('📊 Received data:', data);  // Debug log
+      
+      // Update display even if empty to show real-time status
+      if (data.label) {
+        const confidence = (data.confidence || 0) * 100;
+        detectedLabel.value = `${data.label} (${confidence.toFixed(1)}%)`;
+        
+        // Only add to sentence if it's a new letter
+        if (data.label !== lastAddedToSentence) {
+          // Update stats
+          totalDetections++;
+          totalConfidence += confidence;
+          detectionCount.textContent = totalDetections;
+          confidenceAvg.textContent = Math.round(totalConfidence / totalDetections) + '%';
+          
+          // Add to sentence
+          sentence += data.label;
+          sentenceText.textContent = sentence || 'Start signing to build a sentence...';
+          lastAddedToSentence = data.label;
+          
+          console.log('✅ Added letter:', data.label, 'Sentence:', sentence);
+          
+          // Reset after 2 seconds to allow same letter again
+          setTimeout(() => { 
+            lastAddedToSentence = ''; 
+          }, 2000);
+        }
+      } else {
+        // Clear detection display when no sign is detected
+        if (detectedLabel.value !== '') {
+          detectedLabel.value = '';
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching label:', error);
+      showCustomAlert('❌ Error connecting to detection server. Please refresh the page.', 'danger');
+    }
+  }
+
+  // Clear sentence
+  clearBtn.addEventListener('click', function() {
+    sentence = '';
+    sentenceText.textContent = 'Start signing to build a sentence...';
+    totalDetections = 0;
+    totalConfidence = 0;
+    detectionCount.textContent = '0';
+    confidenceAvg.textContent = '0%';
+    detectedLabel.value = '';
+    lastAddedToSentence = '';
+    showCustomAlert('🗑️ Sentence and statistics cleared!', 'info');
+  });
+
+  // Add space
+  spaceBtn.addEventListener('click', function() {
+    sentence += ' ';
+    sentenceText.textContent = sentence;
+    lastAddedToSentence = '';  // Allow next letter immediately after space
+  });
+
+  // Speak sentence
+  speakBtn.addEventListener('click', function() {
+    if (!sentence || sentence.trim() === '') {
+      showCustomAlert('⚠️ Please build a sentence first before using text-to-speech.', 'warning');
+      return;
+    }
+    
+    if ('speechSynthesis' in window) {
+      // Stop any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(sentence);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      utterance.onstart = function() {
+        console.log('🔊 Started speaking');
+        showCustomAlert('🔊 Speaking your sentence...', 'info');
+      };
+      
+      utterance.onerror = function(event) {
+        console.error('❌ Speech error:', event);
+        showCustomAlert('❌ Error with text-to-speech.', 'danger');
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    } else {
+      showCustomAlert('❌ Text-to-speech is not supported in your browser.', 'danger');
+    }
+  });
+  
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(event) {
+    if (!detectionActive) return;
+    
+    // Space bar - add space
+    if (event.code === 'Space' && event.target.tagName !== 'INPUT') {
+      event.preventDefault();
+      spaceBtn.click();
+    }
+    
+    // Backspace - remove last character
+    if (event.code === 'Backspace' && event.target.tagName !== 'INPUT') {
+      event.preventDefault();
+      if (sentence.length > 0) {
+        sentence = sentence.slice(0, -1);
+        sentenceText.textContent = sentence || 'Start signing to build a sentence...';
+      }
+    }
+    
+    // Enter - speak
+    if (event.code === 'Enter' && event.target.tagName !== 'INPUT') {
+      event.preventDefault();
+      speakBtn.click();
+    }
+  });
+</script>
+{% endblock %}

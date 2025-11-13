@@ -1,0 +1,9 @@
+{
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportAttributeAccessIssue": "none",
+    "reportArgumentType": "information",
+    "reportOptionalMemberAccess": "none",
+    "reportMissingImports": "warning"
+  }
+}

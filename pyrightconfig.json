@@ -1,0 +1,32 @@
+{
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "venv",
+    "env"
+  ],
+  "ignore": [],
+  "defineConstant": {},
+  "stubPath": "",
+  "venv": "venv",
+  "venvPath": ".",
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": false,
+  "reportAttributeAccessIssue": "information",
+  "reportArgumentType": "information",
+  "reportOptionalMemberAccess": "information",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Windows",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.11",
+      "pythonPlatform": "Windows",
+      "extraPaths": []
+    }
+  ]
+}
