@@ -1,5 +1,5 @@
 from datetime import datetime
-from database.db_setup import db
+from db_setup import db
 
 
 class Detection(db.Model):

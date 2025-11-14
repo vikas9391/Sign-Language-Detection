@@ -4,16 +4,28 @@
 
 {% block extra_css %}
 <style>
+  :root {
+    --primary-color: #6366f1;
+    --secondary-color: #8b5cf6;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+  }
+
   #videoContainer {
-    background: #000;
-    border-radius: 12px;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 16px;
     overflow: hidden;
     position: relative;
-    box-shadow: 0 0 40px rgba(99, 102, 241, 0.3);
-    min-height: 450px;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.4);
+    min-height: 480px;
     display: flex;
     align-items: center;
     justify-content: center;
+    border: 3px solid var(--primary-color);
   }
 
   #video {
@@ -26,54 +38,57 @@
   .spinner-border {
     width: 4rem;
     height: 4rem;
-    border-width: 0.4rem;
+    border-width: 0.5rem;
     color: var(--primary-color) !important;
   }
 
   .btn-outline-secondary,
-  .btn-outline-primary {
-    border: 2px solid var(--border-color);
-    color: var(--text-primary);
-    background: transparent;
+  .btn-outline-primary,
+  .btn-outline-warning {
+    border: 2px solid;
+    font-weight: 600;
+    transition: all 0.3s ease;
   }
 
   .btn-outline-secondary:hover,
-  .btn-outline-primary:hover {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+  .btn-outline-primary:hover,
+  .btn-outline-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 
   #detectedLabel {
-    font-size: 1.3rem;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 700;
     text-align: center;
-    letter-spacing: 2px;
+    letter-spacing: 3px;
     color: var(--success-color);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.15));
+    border: 3px solid var(--success-color);
+    padding: 1rem;
+    border-radius: 12px;
+    text-transform: uppercase;
   }
 
   .stats-card {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
-    border: 2px solid var(--primary-color);
-    border-radius: 12px;
-    padding: 1rem;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+    border: 3px solid var(--primary-color);
+    border-radius: 16px;
+    padding: 1.5rem;
     margin-bottom: 1rem;
-    animation: pulse 2s infinite;
+    transition: all 0.3s ease;
+    text-align: center;
   }
 
-  @keyframes pulse {
-    0%, 100% {
-      box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
-    }
-    50% {
-      box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
-    }
+  .stats-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
   }
 
   .stats-card h3 {
     margin: 0;
-    font-size: 2.5rem;
-    font-weight: 700;
+    font-size: 3rem;
+    font-weight: 800;
     background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -81,75 +96,167 @@
   }
 
   .stats-card p {
-    margin: 0;
+    margin: 0.5rem 0 0 0;
     color: var(--text-secondary);
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    font-size: 0.85rem;
+    letter-spacing: 2px;
+    font-size: 0.9rem;
   }
 
   .sentence-builder {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
-    border: 2px solid var(--success-color);
-    border-radius: 12px;
-    padding: 1rem;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
+    border: 3px solid var(--success-color);
+    border-radius: 16px;
+    padding: 2rem;
     margin-top: 1rem;
-    min-height: 80px;
+    min-height: 120px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
   .sentence-text {
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: 1.8rem;
+    font-weight: 700;
     color: var(--success-color);
     text-align: center;
     letter-spacing: 2px;
-    word-break: break-all;
+    word-break: break-word;
+    line-height: 1.5;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
   .action-buttons {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 1.5rem;
   }
 
-  .action-buttons button {
-    flex: 1;
+  .btn-action {
+    padding: 0.75rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+  }
+
+  .btn-action:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .btn-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .status-indicator {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     display: inline-block;
-    margin-right: 8px;
-    animation: blink 1.5s infinite;
+    margin-right: 10px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
   }
 
   .status-active {
     background-color: var(--success-color);
-    box-shadow: 0 0 10px var(--success-color);
+    box-shadow: 0 0 16px var(--success-color);
+    animation: pulse-glow 1.5s infinite;
   }
 
   .status-inactive {
     background-color: var(--text-secondary);
   }
 
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+  @keyframes pulse-glow {
+    0%, 100% { 
+      box-shadow: 0 0 8px var(--success-color);
+      opacity: 1;
+    }
+    50% { 
+      box-shadow: 0 0 20px var(--success-color);
+      opacity: 0.7;
+    }
+  }
+
+  .letter-highlight {
+    animation: letter-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes letter-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  .help-text {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-top: 1rem;
+    font-style: italic;
+    padding: 0.75rem;
+    background: rgba(99, 102, 241, 0.05);
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+  }
+
+  .card {
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .card-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    font-weight: 700;
+    padding: 1rem 1.5rem;
+    border-radius: 14px 14px 0 0 !important;
+    font-size: 1.1rem;
+  }
+
+  .alert-custom {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 320px;
+    max-width: 500px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
   @media (max-width: 992px) {
     #videoContainer {
-      min-height: 300px;
+      min-height: 320px;
     }
     
     .sentence-text {
-      font-size: 1.2rem;
+      font-size: 1.3rem;
+    }
+
+    .action-buttons {
+      grid-template-columns: 1fr;
+    }
+
+    .stats-card h3 {
+      font-size: 2.2rem;
     }
   }
 </style>
@@ -172,6 +279,9 @@
             </div>
             <img id="video" class="img-fluid d-none" alt="video feed" />
           </div>
+          <div class="help-text">
+            💡 <strong>Tips:</strong> Position your hand clearly in frame • Hold each letter steady for 1.2 seconds • Ensure good lighting
+          </div>
         </div>
       </div>
     </div>
@@ -182,53 +292,61 @@
         <div class="card-header">Detection Results</div>
         <div class="card-body">
           <!-- Current Detection -->
-          <div class="mb-3">
-            <label class="form-label">🎯 Current Sign Detected</label>
+          <div class="mb-4">
+            <label class="form-label fw-bold">🎯 Current Sign Detected</label>
             <input id="detectedLabel" class="form-control" type="text" readonly placeholder="No sign detected" />
           </div>
 
           <!-- Stats -->
-          <div class="row mb-3">
+          <div class="row mb-4">
             <div class="col-6">
               <div class="stats-card">
                 <h3 id="detectionCount">0</h3>
-                <p>Detections</p>
+                <p>Letters</p>
               </div>
             </div>
             <div class="col-6">
               <div class="stats-card">
-                <h3 id="confidenceAvg">0%</h3>
-                <p>Avg Confidence</p>
+                <h3 id="wordsCount">0</h3>
+                <p>Words</p>
               </div>
             </div>
           </div>
 
-          <!-- Sentence Builder -->
-          <div class="mb-3">
-            <label class="form-label">📝 Built Sentence</label>
+          <!-- Current Word Building -->
+          <div class="mb-4">
+            <label class="form-label fw-bold">✍️ Current Word</label>
             <div class="sentence-builder">
-              <div class="sentence-text" id="sentenceText">Start signing to build a sentence...</div>
+              <div class="sentence-text" id="currentWordText">Hold letters to build...</div>
+            </div>
+          </div>
+
+          <!-- Completed Words -->
+          <div class="mb-4">
+            <label class="form-label fw-bold">📝 Completed Words</label>
+            <div class="form-control" style="min-height: 70px; background: rgba(99, 102, 241, 0.05); border: 2px solid var(--border-color); border-radius: 12px; padding: 1rem; font-weight: 600;" id="completedWords">
+              No words yet
             </div>
           </div>
 
           <!-- Control Buttons -->
-          <button id="startBtn" class="btn btn-primary w-100 mb-2">
+          <button id="startBtn" class="btn btn-primary w-100 mb-3" style="padding: 1rem; font-size: 1.1rem; font-weight: 700; border-radius: 12px;">
             ▶️ Start Detection
           </button>
-          <button id="stopBtn" class="btn btn-danger w-100 mb-2 d-none">
+          <button id="stopBtn" class="btn btn-danger w-100 mb-3 d-none" style="padding: 1rem; font-size: 1.1rem; font-weight: 700; border-radius: 12px;">
             ⏹️ Stop Detection
           </button>
           
           <!-- Action Buttons -->
           <div class="action-buttons">
-            <button id="clearBtn" class="btn btn-outline-secondary" disabled>
-              Clear
+            <button id="deleteBtn" class="btn btn-outline-warning btn-action" disabled title="Delete last letter (Backspace)">
+              ⌫ Delete
             </button>
-            <button id="spaceBtn" class="btn btn-outline-primary" disabled>
-              Space
+            <button id="clearBtn" class="btn btn-outline-secondary btn-action" disabled title="Clear current word (Delete)">
+              🗑️ Clear
             </button>
-            <button id="speakBtn" class="btn btn-success" disabled>
-              Speak
+            <button id="speakBtn" class="btn btn-outline-success btn-action" disabled title="Speak completed words (Enter)">
+              🔊 Speak
             </button>
           </div>
         </div>
@@ -240,6 +358,28 @@
 
 {% block extra_js %}
 <script>
+  // Define showCustomAlert function first
+  function showCustomAlert(message, type = 'info') {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
+    alertDiv.setAttribute('role', 'alert');
+    
+    alertDiv.innerHTML = `
+      <strong>${type === 'success' ? '✅' : type === 'danger' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}</strong> ${message}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+      alertDiv.classList.remove('show');
+      setTimeout(() => alertDiv.remove(), 200);
+    }, 4000);
+  }
+
+  // **OPTIMIZED: Single endpoint polling instead of 3 separate requests**
+
   // Elements
   const videoElement = document.getElementById('video');
   const spinner = document.getElementById('spinner');
@@ -247,20 +387,20 @@
   const stopBtn = document.getElementById('stopBtn');
   const detectedLabel = document.getElementById('detectedLabel');
   const statusIndicator = document.getElementById('statusIndicator');
-  const sentenceText = document.getElementById('sentenceText');
+  const currentWordText = document.getElementById('currentWordText');
+  const completedWords = document.getElementById('completedWords');
   const clearBtn = document.getElementById('clearBtn');
-  const spaceBtn = document.getElementById('spaceBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
   const speakBtn = document.getElementById('speakBtn');
   const detectionCount = document.getElementById('detectionCount');
-  const confidenceAvg = document.getElementById('confidenceAvg');
+  const wordsCount = document.getElementById('wordsCount');
 
   let detectionActive = false;
   let pollInterval;
-  let sentence = '';
-  let lastDetected = '';
-  let lastAddedToSentence = '';
-  let totalDetections = 0;
-  let totalConfidence = 0;
+  let lastDetectedLabel = '';
+  let totalLetters = 0;
+  let currentWord = '';
+  let wordsList = [];
 
   // Video load handlers
   videoElement.onload = function() {
@@ -269,14 +409,16 @@
     console.log('✅ Video feed loaded successfully');
   };
 
-  videoElement.onerror = function() {
+  videoElement.onerror = function(e) {
     spinner.classList.add('d-none');
-    showCustomAlert('⚠️ Failed to load camera feed. Please check if camera is available and permissions are granted.', 'danger');
+    console.error('❌ Video load error:', e);
+    showCustomAlert('Failed to load camera feed. Please check permissions.', 'danger');
   };
 
   // Start detection
   startBtn.addEventListener('click', function() {
     console.log('🚀 Starting detection...');
+    
     videoElement.src = '{{ url_for("detection.video_feed") }}';
     detectionActive = true;
     startBtn.classList.add('d-none');
@@ -284,163 +426,217 @@
     statusIndicator.classList.remove('status-inactive');
     statusIndicator.classList.add('status-active');
     clearBtn.disabled = false;
-    spaceBtn.disabled = false;
+    deleteBtn.disabled = false;
     speakBtn.disabled = false;
     
-    showCustomAlert('✅ Detection started! Show your ASL signs to the camera.', 'success');
+    showCustomAlert('Detection started! Show ASL letters clearly.', 'success');
     
-    // Poll more frequently for better responsiveness
-    pollInterval = setInterval(fetchLatestLabel, 300);  // Reduced from 500ms
+    // **OPTIMIZED: Poll every 400ms instead of 200ms, and use single endpoint**
+    pollInterval = setInterval(pollDetectionState, 400);
   });
 
   // Stop detection
   stopBtn.addEventListener('click', function() {
     console.log('🛑 Stopping detection...');
+    
     videoElement.src = '';
     videoElement.classList.add('d-none');
     spinner.classList.remove('d-none');
+    
     detectionActive = false;
     startBtn.classList.remove('d-none');
     stopBtn.classList.add('d-none');
     statusIndicator.classList.remove('status-active');
     statusIndicator.classList.add('status-inactive');
     clearBtn.disabled = true;
-    spaceBtn.disabled = true;
+    deleteBtn.disabled = true;
     speakBtn.disabled = true;
     
-    showCustomAlert('🛑 Detection stopped. Click "Start Detection" to resume.', 'warning');
+    showCustomAlert('Detection stopped.', 'warning');
     
-    if (pollInterval) clearInterval(pollInterval);
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    
+    // Call backend to stop camera
+    fetch('{{ url_for("detection.stop_camera") }}', { method: 'POST' })
+      .catch(err => console.error('Error stopping camera:', err));
   });
 
-  // Fetch latest detected label
-  async function fetchLatestLabel() {
+  // **OPTIMIZED: Single request to get all state**
+  async function pollDetectionState() {
     if (!detectionActive) return;
     
     try {
-      const response = await fetch('{{ url_for("detection.get_label") }}');
-      
+      // **ONE request instead of THREE**
+      const response = await fetch('{{ url_for("detection.detection_state") }}');
       if (!response.ok) {
-        console.error('❌ Failed to fetch label:', response.status);
+        console.error('Detection state request failed:', response.status);
         return;
       }
       
       const data = await response.json();
       
-      console.log('📊 Received data:', data);  // Debug log
-      
-      // Update display even if empty to show real-time status
-      if (data.label) {
-        const confidence = (data.confidence || 0) * 100;
-        detectedLabel.value = `${data.label} (${confidence.toFixed(1)}%)`;
+      // Update detected label display
+      if (data.label && data.confidence) {
+        const confidence = (data.confidence * 100).toFixed(1);
+        const displayText = `${data.label} (${confidence}%)`;
         
-        // Only add to sentence if it's a new letter
-        if (data.label !== lastAddedToSentence) {
-          // Update stats
-          totalDetections++;
-          totalConfidence += confidence;
-          detectionCount.textContent = totalDetections;
-          confidenceAvg.textContent = Math.round(totalConfidence / totalDetections) + '%';
+        if (detectedLabel.value !== displayText) {
+          detectedLabel.value = displayText;
           
-          // Add to sentence
-          sentence += data.label;
-          sentenceText.textContent = sentence || 'Start signing to build a sentence...';
-          lastAddedToSentence = data.label;
-          
-          console.log('✅ Added letter:', data.label, 'Sentence:', sentence);
-          
-          // Reset after 2 seconds to allow same letter again
-          setTimeout(() => { 
-            lastAddedToSentence = ''; 
-          }, 2000);
+          // Animation on new detection
+          if (data.label !== lastDetectedLabel) {
+            detectedLabel.classList.add('letter-highlight');
+            setTimeout(() => detectedLabel.classList.remove('letter-highlight'), 400);
+            lastDetectedLabel = data.label;
+          }
         }
       } else {
-        // Clear detection display when no sign is detected
         if (detectedLabel.value !== '') {
           detectedLabel.value = '';
         }
+        lastDetectedLabel = '';
       }
+      
+      // Update current word being built
+      if (data.current_word) {
+        if (currentWord !== data.current_word) {
+          currentWord = data.current_word;
+          currentWordText.textContent = currentWord;
+          currentWordText.classList.add('letter-highlight');
+          setTimeout(() => currentWordText.classList.remove('letter-highlight'), 400);
+          
+          totalLetters = currentWord.length;
+          detectionCount.textContent = totalLetters;
+        }
+      } else {
+        if (currentWord !== '') {
+          currentWord = '';
+          currentWordText.textContent = 'Hold letters to build...';
+          totalLetters = 0;
+          detectionCount.textContent = '0';
+        }
+      }
+      
+      // Update word history
+      if (data.words && data.words.length > 0) {
+        if (JSON.stringify(wordsList) !== JSON.stringify(data.words)) {
+          wordsList = data.words;
+          wordsCount.textContent = wordsList.length;
+          
+          // Display last 5 words
+          const recentWords = wordsList.slice(-5).reverse();
+          completedWords.textContent = recentWords.join(' • ');
+          completedWords.style.fontWeight = '700';
+          completedWords.style.color = 'var(--success-color)';
+        }
+      } else {
+        if (wordsList.length > 0) {
+          wordsList = [];
+          wordsCount.textContent = '0';
+          completedWords.textContent = 'No words yet';
+          completedWords.style.fontWeight = 'normal';
+          completedWords.style.color = 'var(--text-secondary)';
+        }
+      }
+      
     } catch (error) {
-      console.error('❌ Error fetching label:', error);
-      showCustomAlert('❌ Error connecting to detection server. Please refresh the page.', 'danger');
+      console.error('❌ Error polling state:', error);
     }
   }
 
-  // Clear sentence
-  clearBtn.addEventListener('click', function() {
-    sentence = '';
-    sentenceText.textContent = 'Start signing to build a sentence...';
-    totalDetections = 0;
-    totalConfidence = 0;
-    detectionCount.textContent = '0';
-    confidenceAvg.textContent = '0%';
-    detectedLabel.value = '';
-    lastAddedToSentence = '';
-    showCustomAlert('🗑️ Sentence and statistics cleared!', 'info');
+  // Delete last letter
+  deleteBtn.addEventListener('click', async function() {
+    if (!currentWord) {
+      showCustomAlert('No letters to delete.', 'warning');
+      return;
+    }
+    
+    try {
+      const response = await fetch('{{ url_for("detection.delete_letter") }}', { method: 'POST' });
+      if (response.ok) {
+        showCustomAlert('Deleted last letter.', 'info');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting letter:', error);
+      showCustomAlert('Error deleting letter.', 'danger');
+    }
   });
 
-  // Add space
-  spaceBtn.addEventListener('click', function() {
-    sentence += ' ';
-    sentenceText.textContent = sentence;
-    lastAddedToSentence = '';  // Allow next letter immediately after space
+  // Clear current word
+  clearBtn.addEventListener('click', async function() {
+    try {
+      const response = await fetch('{{ url_for("detection.clear_word") }}', { method: 'POST' });
+      if (response.ok) {
+        currentWord = '';
+        totalLetters = 0;
+        detectionCount.textContent = '0';
+        currentWordText.textContent = 'Hold letters to build...';
+        showCustomAlert('Current word cleared!', 'info');
+      }
+    } catch (error) {
+      console.error('❌ Error clearing word:', error);
+      showCustomAlert('Error clearing word.', 'danger');
+    }
   });
 
-  // Speak sentence
+  // Speak completed words
   speakBtn.addEventListener('click', function() {
-    if (!sentence || sentence.trim() === '') {
-      showCustomAlert('⚠️ Please build a sentence first before using text-to-speech.', 'warning');
+    if (wordsList.length === 0) {
+      showCustomAlert('No words to speak.', 'warning');
       return;
     }
     
     if ('speechSynthesis' in window) {
-      // Stop any ongoing speech
       window.speechSynthesis.cancel();
       
-      const utterance = new SpeechSynthesisUtterance(sentence);
-      utterance.rate = 0.9;
+      const textToSpeak = wordsList.join(' ');
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.rate = 0.85;
       utterance.pitch = 1;
       utterance.volume = 1;
       
       utterance.onstart = function() {
-        console.log('🔊 Started speaking');
-        showCustomAlert('🔊 Speaking your sentence...', 'info');
+        showCustomAlert('Speaking words...', 'info');
       };
       
       utterance.onerror = function(event) {
         console.error('❌ Speech error:', event);
-        showCustomAlert('❌ Error with text-to-speech.', 'danger');
+        showCustomAlert('Text-to-speech error.', 'danger');
       };
       
       window.speechSynthesis.speak(utterance);
     } else {
-      showCustomAlert('❌ Text-to-speech is not supported in your browser.', 'danger');
+      showCustomAlert('Text-to-speech not supported in your browser.', 'danger');
     }
   });
-  
+
   // Keyboard shortcuts
   document.addEventListener('keydown', function(event) {
-    if (!detectionActive) return;
+    if (!detectionActive || event.target.tagName === 'INPUT') return;
     
-    // Space bar - add space
-    if (event.code === 'Space' && event.target.tagName !== 'INPUT') {
+    if (event.code === 'Backspace') {
       event.preventDefault();
-      spaceBtn.click();
+      deleteBtn.click();
     }
     
-    // Backspace - remove last character
-    if (event.code === 'Backspace' && event.target.tagName !== 'INPUT') {
+    if (event.code === 'Delete') {
       event.preventDefault();
-      if (sentence.length > 0) {
-        sentence = sentence.slice(0, -1);
-        sentenceText.textContent = sentence || 'Start signing to build a sentence...';
-      }
+      clearBtn.click();
     }
     
-    // Enter - speak
-    if (event.code === 'Enter' && event.target.tagName !== 'INPUT') {
+    if (event.code === 'Enter') {
       event.preventDefault();
       speakBtn.click();
+    }
+  });
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', function() {
+    if (detectionActive) {
+      fetch('{{ url_for("detection.stop_camera") }}', { method: 'POST' });
     }
   });
 </script>

@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, redirect, url_for
 from flask_login import LoginManager, current_user
 from datetime import datetime
-from database.db_setup import db, migrate
+from db_setup import db, migrate
 from models.user_model import User
 import logging
 
@@ -85,11 +85,38 @@ def create_app() -> Flask:
     @login_manager.unauthorized_handler
     def unauthorized():
         """Handle unauthorized access attempts"""
+        # Check if the route allows guest access
+        if request.endpoint and _is_guest_allowed_route(request.endpoint):
+            # Allow access to continue without login
+            return None
+        
         # If request is AJAX, return 401
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return {"error": "Unauthorized"}, 401
         # Otherwise redirect to login
         return redirect(url_for('auth.login', next=request.url))
+
+    def _is_guest_allowed_route(endpoint: str) -> bool:
+        """Check if route allows guest access"""
+        # Routes that allow guest access (customize as needed)
+        guest_allowed = [
+            'main.index',
+            'main.home',
+            'detection.detect',  # Sign language detection page
+            'detection.practice',  # Practice page
+            'detection.video_feed',  # Video stream
+            'detection.get_label',  # Get detected label
+            'detection.get_current_word',  # Get current word
+            'detection.get_word_history',  # Get word history
+            'detection.clear_word',  # Clear current word
+            'detection.delete_letter',  # Delete letter
+            'detection.stop_camera',  # Stop camera
+            'detection.stop',  # Stop camera (alternate route)
+            'detection.detection_status',  # Detection status
+            'static',
+            'health_check',
+        ]
+        return endpoint in guest_allowed
 
     # Update last_seen on each request for authenticated users
     @app.before_request

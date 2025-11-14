@@ -1,55 +1,85 @@
-from flask import Blueprint, Response, render_template, jsonify
-from flask_login import login_required, current_user
+from flask import Blueprint, Response, render_template, jsonify, request, session
+from flask_login import current_user
 from datetime import datetime, timedelta
 import logging
 import atexit
 import time
+import json
 from sqlalchemy import func
 
-from camera.detector import VideoCamera, get_latest_label
+from detector import VideoCamera, get_latest_label, get_current_word, get_word_history
 from models.detection_model import Detection
-from database.db_setup import db
+from db_setup import db
 
 logger = logging.getLogger(__name__)
 
-detection_bp = Blueprint('detection', __name__, url_prefix='/detection')
+detection_bp = Blueprint('detection', __name__)
 
-# Store active camera instances per user
+# Store active camera instances per user/session
 active_cameras = {}
 
 
-def get_camera(user_id):
-    """Get or create camera instance for specific user"""
+def get_user_identifier():
+    """Get user identifier - either user ID or session ID for guests"""
+    if current_user.is_authenticated:
+        return f"user_{current_user.id}"
+    else:
+        if 'guest_id' not in session:
+            session['guest_id'] = f"guest_{int(time.time() * 1000)}"
+        return session['guest_id']
+
+
+def get_camera(identifier=None):
+    """Get or create camera instance for specific user/guest"""
     global active_cameras
     
+    if identifier is None:
+        identifier = get_user_identifier()
+    
     # Clean up old camera if exists
-    if user_id in active_cameras:
+    if identifier in active_cameras:
         try:
-            logger.info(f"🧹 Cleaning up existing camera for user {user_id}")
-            active_cameras[user_id].stop()
-            time.sleep(0.3)  # Give time for cleanup
+            logger.info(f"🧹 Cleaning up existing camera for {identifier}")
+            active_cameras[identifier].stop()
+            time.sleep(0.3)
         except Exception as e:
-            logger.warning(f"⚠️ Error stopping old camera for user {user_id}: {e}")
+            logger.warning(f"⚠️ Error stopping old camera for {identifier}: {e}")
     
     # Create new camera instance
     try:
-        logger.info(f"📹 Initializing camera for user {user_id}...")
+        logger.info(f"📹 Initializing camera for {identifier}...")
         camera = VideoCamera()
-        active_cameras[user_id] = camera
+        active_cameras[identifier] = camera
         return camera
     except Exception as e:
-        logger.error(f"❌ Camera initialization error for user {user_id}: {e}")
+        logger.error(f"❌ Camera initialization error for {identifier}: {e}")
         raise
 
 
-@detection_bp.route('/video_feed')
-@login_required
-def video_feed():
-    """Video streaming route - returns multipart response"""
+@detection_bp.route('/practice')
+def practice():
+    """Practice page for ASL detection - accessible to all"""
     try:
-        user_id = current_user.id
-        logger.info(f"📺 Starting video feed for user {user_id}")
-        cam = get_camera(user_id)
+        return render_template('practice.html', user=current_user if current_user.is_authenticated else None)
+    except Exception as e:
+        logger.error(f"Error rendering practice page: {e}")
+        return jsonify({"error": "Failed to load practice page"}), 500
+
+
+@detection_bp.route('/')
+@detection_bp.route('/detect')
+def detect():
+    """Main detection page - accessible to all"""
+    return render_template('home.html')
+
+
+@detection_bp.route('/video_feed')
+def video_feed():
+    """Video streaming route - accessible to all users"""
+    try:
+        identifier = get_user_identifier()
+        logger.info(f"📺 Starting video feed for {identifier}")
+        cam = get_camera(identifier)
         return Response(
             cam.get_frame(),
             mimetype='multipart/x-mixed-replace; boundary=frame'
@@ -59,23 +89,20 @@ def video_feed():
         return jsonify({"error": str(e)}), 500
 
 
-@detection_bp.route('/get_label')
-@login_required
-def get_label():
-    """Get the latest detected label as JSON and save to database"""
+# **NEW: Single endpoint for all detection state**
+@detection_bp.route('/detection_state')
+def detection_state():
+    """Get complete detection state in a single request - OPTIMIZED"""
     try:
+        # Get all state in one go
         label, confidence = get_latest_label()
+        current_word_val = get_current_word()
+        words = get_word_history()
         
-        # Debug logging - only log when there's a label
-        if label:
-            logger.debug(f"📤 Sending to frontend: label={label}, confidence={confidence:.2f}")
-        
-        # Save detection to database if confidence is high enough
-        if label and confidence > 0.75:
+        # Save detection to database only for authenticated users
+        if current_user.is_authenticated and label and confidence > 0.75:
             try:
-                # Check if this sign was recently saved (avoid duplicates within 2 seconds)
                 recent_time = datetime.utcnow() - timedelta(seconds=2)
-                
                 recent_detection = Detection.query.filter(
                     Detection.user_id == current_user.id,
                     Detection.detected_sign == label,
@@ -88,81 +115,162 @@ def get_label():
                     detection.detected_sign = label
                     db.session.add(detection)
                     db.session.commit()
-                    logger.info(f"💾 Saved detection: {label} for user {current_user.id}")
             except Exception as e:
                 logger.error(f"❌ Error saving detection: {e}")
                 db.session.rollback()
         
-        # IMPORTANT: Always return proper JSON response
-        response_data = {
+        # Return everything in one response
+        return jsonify({
             "label": label,
-            "confidence": float(confidence) if confidence else 0.0
-        }
-        
-        return jsonify(response_data), 200
+            "confidence": float(confidence) if confidence else 0.0,
+            "current_word": current_word_val,
+            "words": words,
+            "word_count": len(words)
+        }), 200
         
     except Exception as e:
-        logger.error(f"❌ Error getting label: {e}", exc_info=True)
+        logger.error(f"❌ Error getting detection state: {e}", exc_info=True)
         return jsonify({
             "label": "",
-            "confidence": 0.0
-        }), 200  # Return 200 even on error to prevent frontend issues
+            "confidence": 0.0,
+            "current_word": "",
+            "words": [],
+            "word_count": 0
+        }), 200
 
 
-@detection_bp.route('/')
-@detection_bp.route('/detect')
-@login_required
-def detect():
-    """Main detection page"""
-    return render_template('home.html')
+# Keep legacy endpoints for backward compatibility
+@detection_bp.route('/get_label')
+def get_label():
+    """Get the latest detected label - DEPRECATED, use /detection_state instead"""
+    try:
+        label, confidence = get_latest_label()
+        return jsonify({
+            "label": label,
+            "confidence": float(confidence) if confidence else 0.0
+        }), 200
+    except Exception as e:
+        logger.error(f"❌ Error getting label: {e}")
+        return jsonify({"label": "", "confidence": 0.0}), 200
+
+
+@detection_bp.route('/get_current_word')
+def get_current_word_route():
+    """Get the current word - DEPRECATED, use /detection_state instead"""
+    try:
+        word = get_current_word()
+        return jsonify({"word": word})
+    except Exception as e:
+        logger.error(f"Error getting current word: {e}")
+        return jsonify({"word": ""})
+
+
+@detection_bp.route('/get_word_history')
+def get_word_history_route():
+    """Get completed words - DEPRECATED, use /detection_state instead"""
+    try:
+        words = get_word_history()
+        return jsonify({"words": words, "count": len(words)})
+    except Exception as e:
+        logger.error(f"Error getting word history: {e}")
+        return jsonify({"words": [], "count": 0})
+
+
+@detection_bp.route('/clear_word', methods=['POST'])
+def clear_word():
+    """Clear the current word being built"""
+    try:
+        identifier = get_user_identifier()
+        if identifier in active_cameras:
+            active_cameras[identifier].clear_current_word()
+            return jsonify({"success": True, "message": "Word cleared"})
+        return jsonify({"success": False, "message": "Camera not initialized"}), 400
+    except Exception as e:
+        logger.error(f"Error clearing word: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@detection_bp.route('/delete_letter', methods=['POST'])
+def delete_letter():
+    """Delete the last letter from current word"""
+    try:
+        identifier = get_user_identifier()
+        if identifier in active_cameras:
+            active_cameras[identifier].delete_last_letter()
+            return jsonify({"success": True, "message": "Letter deleted"})
+        return jsonify({"success": False, "message": "Camera not initialized"}), 400
+    except Exception as e:
+        logger.error(f"Error deleting letter: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @detection_bp.route('/stop')
-@detection_bp.route('/stop_camera')
-@login_required
+@detection_bp.route('/stop_camera', methods=['GET', 'POST'])
 def stop_camera():
-    """Stop and release camera for current user"""
+    """Stop and release camera for current user/guest"""
     global active_cameras
     
     try:
-        user_id = current_user.id
+        identifier = get_user_identifier()
         
-        if user_id in active_cameras:
+        if identifier in active_cameras:
             try:
-                logger.info(f"🛑 Stopping camera for user {user_id}")
-                active_cameras[user_id].stop()
-                time.sleep(0.2)  # Allow cleanup time
-                del active_cameras[user_id]
-                logger.info(f"✅ Camera stopped for user {user_id}")
+                logger.info(f"🛑 Stopping camera for {identifier}")
+                active_cameras[identifier].stop()
+                time.sleep(0.2)
+                del active_cameras[identifier]
+                logger.info(f"✅ Camera stopped for {identifier}")
                 return jsonify({
                     "success": True,
-                    "status": "Camera stopped"
+                    "status": "Camera stopped",
+                    "message": "Camera stopped"
                 })
             except Exception as e:
-                logger.error(f"❌ Error stopping camera for user {user_id}: {e}")
-                return jsonify({
-                    "success": False,
-                    "error": str(e)
-                }), 500
+                logger.error(f"❌ Error stopping camera for {identifier}: {e}")
+                return jsonify({"success": False, "error": str(e)}), 500
         
         return jsonify({
             "success": True,
-            "status": "Camera was not running"
+            "status": "Camera was not running",
+            "message": "Camera already stopped"
         })
     except Exception as e:
         logger.error(f"❌ Error in stop_camera: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
+
+@detection_bp.route('/detection_status')
+def detection_status():
+    """Get detection system status"""
+    try:
+        identifier = get_user_identifier()
+        is_active = identifier in active_cameras and active_cameras[identifier].is_running
+        
+        label, conf = get_latest_label()
+        current_word_val = get_current_word()
+        words = get_word_history()
+        
+        return jsonify({
+            "active": is_active,
+            "current_label": label,
+            "confidence": float(conf),
+            "current_word": current_word_val,
+            "word_count": len(words),
+            "words": words
+        })
+    except Exception as e:
+        logger.error(f"Error getting status: {e}")
+        return jsonify({"active": False, "error": str(e)}), 500
+
+
+# Routes below require authentication (history/stats features)
+from flask_login import login_required
 
 @detection_bp.route('/detection_history')
 @login_required
 def detection_history():
-    """Get user's detection history"""
+    """Get user's detection history - requires authentication"""
     try:
-        # Get recent detections (last 100)
         detections = Detection.query.filter_by(
             user_id=current_user.id
         ).order_by(
@@ -193,7 +301,7 @@ def detection_history():
 @detection_bp.route('/clear_history', methods=["POST"])
 @login_required
 def clear_history():
-    """Clear user's detection history"""
+    """Clear user's detection history - requires authentication"""
     try:
         deleted_count = Detection.query.filter_by(
             user_id=current_user.id
@@ -218,28 +326,24 @@ def clear_history():
 @detection_bp.route('/detection_stats')
 @login_required
 def detection_stats():
-    """Get user's detection statistics"""
+    """Get user's detection statistics - requires authentication"""
     try:
-        # Total detections
         total_detections = Detection.query.filter_by(
             user_id=current_user.id
         ).count()
         
-        # Get unique signs detected
         unique_signs = db.session.query(
             Detection.detected_sign
         ).filter_by(
             user_id=current_user.id
         ).distinct().count()
         
-        # Get most recent detection
         recent_detection = Detection.query.filter_by(
             user_id=current_user.id
         ).order_by(
             Detection.timestamp.desc()
         ).first()
         
-        # Get most common sign
         most_common = db.session.query(
             Detection.detected_sign,
             func.count(Detection.id).label('count')
@@ -269,22 +373,35 @@ def detection_stats():
         }), 500
 
 
-# Cleanup on app shutdown
+# Cleanup functions
 def cleanup_cameras():
     """Clean up all active cameras"""
     global active_cameras
     logger.info("🧹 Cleaning up all cameras...")
     
-    for user_id, camera in list(active_cameras.items()):
+    for identifier, camera in list(active_cameras.items()):
         try:
             camera.stop()
-            logger.info(f"✅ Stopped camera for user {user_id}")
+            logger.info(f"✅ Stopped camera for {identifier}")
         except Exception as e:
-            logger.error(f"❌ Error stopping camera for user {user_id}: {e}")
+            logger.error(f"❌ Error stopping camera for {identifier}: {e}")
     
     active_cameras.clear()
     logger.info("✅ All cameras cleaned up")
 
 
-# Register cleanup function
 atexit.register(cleanup_cameras)
+
+
+@detection_bp.teardown_app_request
+def cleanup_camera_on_error(exception=None):
+    """Cleanup camera on request end if there was an error"""
+    if exception:
+        try:
+            identifier = get_user_identifier()
+            if identifier in active_cameras:
+                active_cameras[identifier].stop()
+                del active_cameras[identifier]
+                logger.info(f"🧹 Camera cleaned up after error for {identifier}")
+        except Exception as e:
+            logger.error(f"Error during cleanup: {e}")
