@@ -42,52 +42,35 @@
     color: var(--primary-color) !important;
   }
 
-  .btn-outline-secondary,
-  .btn-outline-primary,
-  .btn-outline-warning {
-    border: 2px solid;
-    font-weight: 600;
-    transition: all 0.3s ease;
-  }
-
-  .btn-outline-secondary:hover,
-  .btn-outline-primary:hover,
-  .btn-outline-warning:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
   #detectedLabel {
-    font-size: 1.4rem;
+    font-size: 1.8rem;
     font-weight: 700;
     text-align: center;
-    letter-spacing: 3px;
+    letter-spacing: 4px;
     color: var(--success-color);
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.15));
     border: 3px solid var(--success-color);
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: 12px;
     text-transform: uppercase;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .stats-card {
     background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
     border: 3px solid var(--primary-color);
     border-radius: 16px;
-    padding: 1.5rem;
+    padding: 2rem;
     margin-bottom: 1rem;
-    transition: all 0.3s ease;
     text-align: center;
-  }
-
-  .stats-card:hover {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
   }
 
   .stats-card h3 {
     margin: 0;
-    font-size: 3rem;
+    font-size: 3.5rem;
     font-weight: 800;
     background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
     -webkit-background-clip: text;
@@ -101,50 +84,21 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 2px;
-    font-size: 0.9rem;
-  }
-
-  .sentence-builder {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
-    border: 3px solid var(--success-color);
-    border-radius: 16px;
-    padding: 2rem;
-    margin-top: 1rem;
-    min-height: 120px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sentence-text {
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--success-color);
-    text-align: center;
-    letter-spacing: 2px;
-    word-break: break-word;
-    line-height: 1.5;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-size: 0.95rem;
   }
 
   .action-buttons {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
     margin-top: 1.5rem;
   }
 
   .btn-action {
-    padding: 0.75rem;
+    padding: 0.9rem;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 1rem;
     border-radius: 10px;
-    transition: all 0.3s ease;
-  }
-
-  .btn-action:hover:not(:disabled) {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
   }
 
   .btn-action:disabled {
@@ -181,16 +135,6 @@
       box-shadow: 0 0 20px var(--success-color);
       opacity: 0.7;
     }
-  }
-
-  .letter-highlight {
-    animation: letter-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  }
-
-  @keyframes letter-pop {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.15); }
-    100% { transform: scale(1); }
   }
 
   .help-text {
@@ -242,21 +186,24 @@
     }
   }
 
+  .confidence-display {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
   @media (max-width: 992px) {
     #videoContainer {
       min-height: 320px;
     }
-    
-    .sentence-text {
-      font-size: 1.3rem;
+
+    .stats-card h3 {
+      font-size: 2.5rem;
     }
 
     .action-buttons {
       grid-template-columns: 1fr;
-    }
-
-    .stats-card h3 {
-      font-size: 2.2rem;
     }
   }
 </style>
@@ -280,7 +227,7 @@
             <img id="video" class="img-fluid d-none" alt="video feed" />
           </div>
           <div class="help-text">
-            💡 <strong>Tips:</strong> Position your hand clearly in frame • Hold each letter steady for 1.2 seconds • Ensure good lighting
+            💡 <strong>Tips:</strong> Position your hand clearly in frame • Hold each letter steady • Ensure good lighting for better accuracy
           </div>
         </div>
       </div>
@@ -294,38 +241,17 @@
           <!-- Current Detection -->
           <div class="mb-4">
             <label class="form-label fw-bold">🎯 Current Sign Detected</label>
-            <input id="detectedLabel" class="form-control" type="text" readonly placeholder="No sign detected" />
+            <div id="detectedLabel">
+              <span id="letterDisplay">No sign detected</span>
+            </div>
+            <div class="confidence-display" id="confidenceDisplay"></div>
           </div>
 
-          <!-- Stats -->
-          <div class="row mb-4">
-            <div class="col-6">
-              <div class="stats-card">
-                <h3 id="detectionCount">0</h3>
-                <p>Letters</p>
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="stats-card">
-                <h3 id="wordsCount">0</h3>
-                <p>Words</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Current Word Building -->
+          <!-- Detection Counter -->
           <div class="mb-4">
-            <label class="form-label fw-bold">✍️ Current Word</label>
-            <div class="sentence-builder">
-              <div class="sentence-text" id="currentWordText">Hold letters to build...</div>
-            </div>
-          </div>
-
-          <!-- Completed Words -->
-          <div class="mb-4">
-            <label class="form-label fw-bold">📝 Completed Words</label>
-            <div class="form-control" style="min-height: 70px; background: rgba(99, 102, 241, 0.05); border: 2px solid var(--border-color); border-radius: 12px; padding: 1rem; font-weight: 600;" id="completedWords">
-              No words yet
+            <div class="stats-card">
+              <h3 id="detectionCount">0</h3>
+              <p>Total Detections</p>
             </div>
           </div>
 
@@ -339,15 +265,24 @@
           
           <!-- Action Buttons -->
           <div class="action-buttons">
-            <button id="deleteBtn" class="btn btn-outline-warning btn-action" disabled title="Delete last letter (Backspace)">
-              ⌫ Delete
+            <button id="resetBtn" class="btn btn-outline-secondary btn-action" disabled title="Reset counter">
+              🔄 Reset Count
             </button>
-            <button id="clearBtn" class="btn btn-outline-secondary btn-action" disabled title="Clear current word (Delete)">
-              🗑️ Clear
-            </button>
-            <button id="speakBtn" class="btn btn-outline-success btn-action" disabled title="Speak completed words (Enter)">
+            <button id="speakBtn" class="btn btn-outline-success btn-action" disabled title="Speak detected letter">
               🔊 Speak
             </button>
+          </div>
+
+          <!-- Instructions -->
+          <div class="mt-4 p-3" style="background: rgba(99, 102, 241, 0.05); border-radius: 12px; border: 2px dashed var(--primary-color);">
+            <h6 class="fw-bold mb-2">📋 How to Use:</h6>
+            <ul class="mb-0" style="font-size: 0.9rem; color: var(--text-secondary);">
+              <li>Click "Start Detection" to begin</li>
+              <li>Show ASL letters to the camera</li>
+              <li>Hold each letter steady for recognition</li>
+              <li>View your total detections</li>
+              <li>Use "Reset Count" to start over</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -357,8 +292,15 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 <script>
-  // Define showCustomAlert function first
+  // Socket.IO connection
+  const socket = io({
+    transports: ['websocket', 'polling'],
+    upgrade: true,
+    rememberUpgrade: true
+  });
+
   function showCustomAlert(message, type = 'info') {
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
@@ -371,272 +313,209 @@
     
     document.body.appendChild(alertDiv);
     
-    // Auto-remove after 4 seconds
     setTimeout(() => {
       alertDiv.classList.remove('show');
       setTimeout(() => alertDiv.remove(), 200);
     }, 4000);
   }
 
-  // **OPTIMIZED: Single endpoint polling instead of 3 separate requests**
-
   // Elements
   const videoElement = document.getElementById('video');
   const spinner = document.getElementById('spinner');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const detectedLabel = document.getElementById('detectedLabel');
+  const letterDisplay = document.getElementById('letterDisplay');
+  const confidenceDisplay = document.getElementById('confidenceDisplay');
   const statusIndicator = document.getElementById('statusIndicator');
-  const currentWordText = document.getElementById('currentWordText');
-  const completedWords = document.getElementById('completedWords');
-  const clearBtn = document.getElementById('clearBtn');
-  const deleteBtn = document.getElementById('deleteBtn');
-  const speakBtn = document.getElementById('speakBtn');
   const detectionCount = document.getElementById('detectionCount');
-  const wordsCount = document.getElementById('wordsCount');
+  const resetBtn = document.getElementById('resetBtn');
+  const speakBtn = document.getElementById('speakBtn');
 
   let detectionActive = false;
-  let pollInterval;
   let lastDetectedLabel = '';
-  let totalLetters = 0;
-  let currentWord = '';
-  let wordsList = [];
+  let currentLabel = '';
 
-  // Video load handlers
-  videoElement.onload = function() {
-    spinner.classList.add('d-none');
+  // Socket.IO event handlers
+  socket.on('connect', () => {
+    console.log('✅ Connected to server');
+    showCustomAlert('Connected to server', 'success');
+  });
+
+  socket.on('disconnect', () => {
+    console.log('❌ Disconnected from server');
+    showCustomAlert('Disconnected from server', 'warning');
+    if (detectionActive) {
+      resetUI();
+    }
+  });
+
+  socket.on('connection_response', (data) => {
+    console.log('Server response:', data);
+  });
+
+  // MAIN VIDEO FRAME HANDLER - receives base64 frames
+  socket.on('video_frame', (data) => {
+    // Update video display with base64 image
+    if (data.image) {
+      videoElement.src = 'data:image/jpeg;base64,' + data.image;
+      
+      // Hide spinner once first frame arrives
+      if (!spinner.classList.contains('d-none')) {
+        spinner.classList.add('d-none');
+        videoElement.classList.remove('d-none');
+      }
+    }
+    
+    // Update detection UI with the detection data
+    updateDetectionUI(data);
+  });
+
+  socket.on('detection_started', (data) => {
+    console.log('✅ Detection started:', data);
+    showCustomAlert(data.message, 'success');
     videoElement.classList.remove('d-none');
-    console.log('✅ Video feed loaded successfully');
-  };
+  });
 
-  videoElement.onerror = function(e) {
-    spinner.classList.add('d-none');
-    console.error('❌ Video load error:', e);
-    showCustomAlert('Failed to load camera feed. Please check permissions.', 'danger');
-  };
+  socket.on('detection_stopped', (data) => {
+    console.log('⏹️ Detection stopped:', data);
+    showCustomAlert(data.message, 'info');
+    resetUI();
+  });
+
+  socket.on('count_reset', (data) => {
+    console.log('🔄 Count reset');
+    showCustomAlert('Detection counter reset!', 'info');
+  });
+
+  socket.on('error', (data) => {
+    console.error('❌ Socket error:', data);
+    showCustomAlert(data.message, 'danger');
+  });
+
+  function updateDetectionUI(data) {
+    // Update detected label
+    if (data.label && data.confidence) {
+      const confidence = (data.confidence * 100).toFixed(1);
+      currentLabel = data.label;
+      
+      if (letterDisplay.textContent !== data.label) {
+        letterDisplay.textContent = data.label;
+        
+        if (data.label !== lastDetectedLabel) {
+          lastDetectedLabel = data.label;
+          // Optionally speak on new detection
+          if (speakBtn.getAttribute('data-auto-speak') === 'true') {
+            speakLetter(data.label);
+          }
+        }
+      }
+      
+      confidenceDisplay.textContent = `Confidence: ${confidence}%`;
+      confidenceDisplay.style.color = confidence > 85 ? 'var(--success-color)' : 'var(--warning-color)';
+    } else {
+      if (letterDisplay.textContent !== 'No sign detected') {
+        letterDisplay.textContent = 'No sign detected';
+        confidenceDisplay.textContent = '';
+        currentLabel = '';
+      }
+      lastDetectedLabel = '';
+    }
+    
+    // Update detection count
+    if (data.detection_count !== undefined) {
+      detectionCount.textContent = data.detection_count;
+    }
+  }
+
+  function resetUI() {
+    detectionActive = false;
+    videoElement.src = '';
+    videoElement.classList.add('d-none');
+    spinner.classList.remove('d-none');
+    startBtn.classList.remove('d-none');
+    stopBtn.classList.add('d-none');
+    statusIndicator.classList.remove('status-active');
+    statusIndicator.classList.add('status-inactive');
+    resetBtn.disabled = true;
+    speakBtn.disabled = true;
+    letterDisplay.textContent = 'No sign detected';
+    confidenceDisplay.textContent = '';
+  }
 
   // Start detection
-  startBtn.addEventListener('click', function() {
+  startBtn.addEventListener('click', () => {
     console.log('🚀 Starting detection...');
     
-    videoElement.src = '{{ url_for("detection.video_feed") }}';
+    videoElement.classList.remove('d-none');
+    spinner.classList.remove('d-none');
+    
+    socket.emit('start_detection');
+    
     detectionActive = true;
     startBtn.classList.add('d-none');
     stopBtn.classList.remove('d-none');
     statusIndicator.classList.remove('status-inactive');
     statusIndicator.classList.add('status-active');
-    clearBtn.disabled = false;
-    deleteBtn.disabled = false;
+    resetBtn.disabled = false;
     speakBtn.disabled = false;
-    
-    showCustomAlert('Detection started! Show ASL letters clearly.', 'success');
-    
-    // **OPTIMIZED: Poll every 400ms instead of 200ms, and use single endpoint**
-    pollInterval = setInterval(pollDetectionState, 400);
   });
 
   // Stop detection
-  stopBtn.addEventListener('click', function() {
+  stopBtn.addEventListener('click', () => {
     console.log('🛑 Stopping detection...');
-    
-    videoElement.src = '';
-    videoElement.classList.add('d-none');
-    spinner.classList.remove('d-none');
-    
-    detectionActive = false;
-    startBtn.classList.remove('d-none');
-    stopBtn.classList.add('d-none');
-    statusIndicator.classList.remove('status-active');
-    statusIndicator.classList.add('status-inactive');
-    clearBtn.disabled = true;
-    deleteBtn.disabled = true;
-    speakBtn.disabled = true;
-    
-    showCustomAlert('Detection stopped.', 'warning');
-    
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-    
-    // Call backend to stop camera
-    fetch('{{ url_for("detection.stop_camera") }}', { method: 'POST' })
-      .catch(err => console.error('Error stopping camera:', err));
+    socket.emit('stop_detection');
+    resetUI();
   });
 
-  // **OPTIMIZED: Single request to get all state**
-  async function pollDetectionState() {
-    if (!detectionActive) return;
-    
-    try {
-      // **ONE request instead of THREE**
-      const response = await fetch('{{ url_for("detection.detection_state") }}');
-      if (!response.ok) {
-        console.error('Detection state request failed:', response.status);
-        return;
-      }
-      
-      const data = await response.json();
-      
-      // Update detected label display
-      if (data.label && data.confidence) {
-        const confidence = (data.confidence * 100).toFixed(1);
-        const displayText = `${data.label} (${confidence}%)`;
-        
-        if (detectedLabel.value !== displayText) {
-          detectedLabel.value = displayText;
-          
-          // Animation on new detection
-          if (data.label !== lastDetectedLabel) {
-            detectedLabel.classList.add('letter-highlight');
-            setTimeout(() => detectedLabel.classList.remove('letter-highlight'), 400);
-            lastDetectedLabel = data.label;
-          }
-        }
-      } else {
-        if (detectedLabel.value !== '') {
-          detectedLabel.value = '';
-        }
-        lastDetectedLabel = '';
-      }
-      
-      // Update current word being built
-      if (data.current_word) {
-        if (currentWord !== data.current_word) {
-          currentWord = data.current_word;
-          currentWordText.textContent = currentWord;
-          currentWordText.classList.add('letter-highlight');
-          setTimeout(() => currentWordText.classList.remove('letter-highlight'), 400);
-          
-          totalLetters = currentWord.length;
-          detectionCount.textContent = totalLetters;
-        }
-      } else {
-        if (currentWord !== '') {
-          currentWord = '';
-          currentWordText.textContent = 'Hold letters to build...';
-          totalLetters = 0;
-          detectionCount.textContent = '0';
-        }
-      }
-      
-      // Update word history
-      if (data.words && data.words.length > 0) {
-        if (JSON.stringify(wordsList) !== JSON.stringify(data.words)) {
-          wordsList = data.words;
-          wordsCount.textContent = wordsList.length;
-          
-          // Display last 5 words
-          const recentWords = wordsList.slice(-5).reverse();
-          completedWords.textContent = recentWords.join(' • ');
-          completedWords.style.fontWeight = '700';
-          completedWords.style.color = 'var(--success-color)';
-        }
-      } else {
-        if (wordsList.length > 0) {
-          wordsList = [];
-          wordsCount.textContent = '0';
-          completedWords.textContent = 'No words yet';
-          completedWords.style.fontWeight = 'normal';
-          completedWords.style.color = 'var(--text-secondary)';
-        }
-      }
-      
-    } catch (error) {
-      console.error('❌ Error polling state:', error);
-    }
-  }
-
-  // Delete last letter
-  deleteBtn.addEventListener('click', async function() {
-    if (!currentWord) {
-      showCustomAlert('No letters to delete.', 'warning');
-      return;
-    }
-    
-    try {
-      const response = await fetch('{{ url_for("detection.delete_letter") }}', { method: 'POST' });
-      if (response.ok) {
-        showCustomAlert('Deleted last letter.', 'info');
-      }
-    } catch (error) {
-      console.error('❌ Error deleting letter:', error);
-      showCustomAlert('Error deleting letter.', 'danger');
-    }
+  // Reset counter
+  resetBtn.addEventListener('click', () => {
+    socket.emit('reset_count');
+    detectionCount.textContent = '0';
   });
 
-  // Clear current word
-  clearBtn.addEventListener('click', async function() {
-    try {
-      const response = await fetch('{{ url_for("detection.clear_word") }}', { method: 'POST' });
-      if (response.ok) {
-        currentWord = '';
-        totalLetters = 0;
-        detectionCount.textContent = '0';
-        currentWordText.textContent = 'Hold letters to build...';
-        showCustomAlert('Current word cleared!', 'info');
-      }
-    } catch (error) {
-      console.error('❌ Error clearing word:', error);
-      showCustomAlert('Error clearing word.', 'danger');
-    }
-  });
-
-  // Speak completed words
-  speakBtn.addEventListener('click', function() {
-    if (wordsList.length === 0) {
-      showCustomAlert('No words to speak.', 'warning');
-      return;
-    }
-    
-    if ('speechSynthesis' in window) {
+  // Speak letter
+  function speakLetter(letter) {
+    if ('speechSynthesis' in window && letter) {
       window.speechSynthesis.cancel();
       
-      const textToSpeak = wordsList.join(' ');
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.rate = 0.85;
+      const utterance = new SpeechSynthesisUtterance(letter);
+      utterance.rate = 0.8;
       utterance.pitch = 1;
       utterance.volume = 1;
       
-      utterance.onstart = function() {
-        showCustomAlert('Speaking words...', 'info');
-      };
-      
-      utterance.onerror = function(event) {
-        console.error('❌ Speech error:', event);
-        showCustomAlert('Text-to-speech error.', 'danger');
-      };
-      
       window.speechSynthesis.speak(utterance);
-    } else {
-      showCustomAlert('Text-to-speech not supported in your browser.', 'danger');
     }
+  }
+
+  speakBtn.addEventListener('click', () => {
+    if (!currentLabel) {
+      showCustomAlert('No letter detected to speak.', 'warning');
+      return;
+    }
+    
+    speakLetter(currentLabel);
+    showCustomAlert(`Speaking: ${currentLabel}`, 'info');
   });
 
   // Keyboard shortcuts
-  document.addEventListener('keydown', function(event) {
-    if (!detectionActive || event.target.tagName === 'INPUT') return;
+  document.addEventListener('keydown', (event) => {
+    if (!detectionActive) return;
     
-    if (event.code === 'Backspace') {
+    if (event.code === 'KeyR' && event.ctrlKey) {
       event.preventDefault();
-      deleteBtn.click();
+      resetBtn.click();
     }
     
-    if (event.code === 'Delete') {
-      event.preventDefault();
-      clearBtn.click();
-    }
-    
-    if (event.code === 'Enter') {
+    if (event.code === 'Space') {
       event.preventDefault();
       speakBtn.click();
     }
   });
 
   // Cleanup on page unload
-  window.addEventListener('beforeunload', function() {
+  window.addEventListener('beforeunload', () => {
     if (detectionActive) {
-      fetch('{{ url_for("detection.stop_camera") }}', { method: 'POST' });
+      socket.emit('stop_detection');
     }
   });
 </script>

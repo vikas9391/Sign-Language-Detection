@@ -5,43 +5,33 @@ import numpy as np
 import logging
 from collections import deque, Counter
 import time
+import gc
+import base64
 
-# MediaPipe imports
 try:
     from mediapipe.python.solutions import hands as mp_hands
     from mediapipe.python.solutions import drawing_utils as mp_drawing
     MEDIAPIPE_AVAILABLE = True
 except ImportError as e:
     MEDIAPIPE_AVAILABLE = False
-    raise ImportError("MediaPipe not installed. Run: pip install mediapipe") from e
+    raise ImportError("MediaPipe not installed") from e
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global state with better thread safety
 _state_lock = threading.Lock()
 _latest_label: Tuple[str, float] = ("", 0.0)
-_current_word: str = ""
-_word_history: List[str] = []
+_detection_count: int = 0
 
 
 def get_latest_label() -> Tuple[str, float]:
-    """Thread-safe getter for the latest detected label"""
     with _state_lock:
         return _latest_label
 
 
-def get_current_word() -> str:
-    """Thread-safe getter for the current word being formed"""
+def get_detection_count() -> int:
     with _state_lock:
-        return _current_word
-
-
-def get_word_history() -> List[str]:
-    """Thread-safe getter for word history"""
-    with _state_lock:
-        return _word_history.copy()
+        return _detection_count
 
 
 class ASLRecognizer:
@@ -59,7 +49,6 @@ class ASLRecognizer:
         
         extended = self._get_extended_fingers(landmarks)
         
-        # Check each letter with priority order
         checks = [
             ("Y", self._is_letter_y, landmarks, extended),
             ("I", self._is_letter_i, extended, landmarks),
@@ -97,17 +86,14 @@ class ASLRecognizer:
         return "", 0.0
     
     def _get_extended_fingers(self, landmarks: Any) -> List[bool]:
-        """Determine which fingers are extended"""
         extended = []
         wrist = landmarks[0]
         
-        # Thumb
         thumb_tip = landmarks[4]
         thumb_mcp = landmarks[2]
         thumb_extended = abs(thumb_tip.x - wrist.x) > abs(thumb_mcp.x - wrist.x) + 0.02
         extended.append(thumb_extended)
         
-        # Other fingers
         for i in range(1, 5):
             tip = landmarks[self.finger_tips[i]]
             mcp = landmarks[self.finger_mcps[i]]
@@ -117,10 +103,8 @@ class ASLRecognizer:
         return extended
     
     def _distance(self, p1: Any, p2: Any) -> float:
-        """Calculate 2D distance"""
         return float(np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2))
     
-    # All letter recognition methods
     def _is_letter_a(self, extended: List[bool], landmarks: Any) -> float:
         if not any(extended[1:5]) and extended[0]:
             thumb_tip = landmarks[4]
@@ -421,9 +405,9 @@ class ASLRecognizer:
 
 
 class PredictionSmoother:
-    """Advanced smoothing"""
+    """Advanced smoothing for stable letter detection"""
     
-    def __init__(self, window_size: int = 12, min_confidence: float = 0.75, consensus_threshold: float = 0.65):
+    def __init__(self, window_size: int = 10, min_confidence: float = 0.75, consensus_threshold: float = 0.60):
         self.predictions: deque = deque(maxlen=window_size)
         self.confidences: deque = deque(maxlen=window_size)
         self.window_size = window_size
@@ -435,7 +419,7 @@ class PredictionSmoother:
         self.confidences.append(confidence)
         
     def get_stable_prediction(self) -> Tuple[str, float]:
-        if len(self.predictions) < 6:
+        if len(self.predictions) < 5:
             return "", 0.0
         
         valid = [
@@ -443,7 +427,7 @@ class PredictionSmoother:
             if c >= self.min_confidence and p != ""
         ]
         
-        if len(valid) < 4:
+        if len(valid) < 3:
             return "", 0.0
         
         labels = [p for p, _ in valid]
@@ -463,120 +447,29 @@ class PredictionSmoother:
         final_conf = min(avg_conf + 0.03, 0.98)
         
         return most_common_label, final_conf
-
-
-class WordBuilder:
-    """Build words from detected letters"""
     
-    def __init__(self, letter_hold_time: float = 1.2, space_delay: float = 2.5, min_confidence: float = 0.80):
-        self.current_word = ""
-        self.last_letter = ""
-        self.last_letter_time = 0.0
-        self.letter_seen_start = 0.0
-        self.letter_confirmed = False
-        self.letter_hold_time = letter_hold_time
-        self.space_delay = space_delay
-        self.min_confidence = min_confidence
-        self.words: List[str] = []
-        self.lock = threading.Lock()
-        
-    def add_letter(self, letter: str, confidence: float):
-        current_time = time.time()
-        
-        with self.lock:
-            if not letter or confidence < self.min_confidence:
-                if (self.current_word and 
-                    self.last_letter and
-                    current_time - self.last_letter_time > self.space_delay):
-                    self._complete_word()
-                
-                self.letter_seen_start = 0
-                self.letter_confirmed = False
-                return
-            
-            if letter == self.last_letter:
-                if self.letter_confirmed:
-                    return
-                
-                if current_time - self.letter_seen_start >= self.letter_hold_time:
-                    if not self.letter_confirmed:
-                        self.current_word += letter
-                        self.letter_confirmed = True
-                        self.last_letter_time = current_time
-                        
-                        global _current_word
-                        with _state_lock:
-                            _current_word = self.current_word
-                        
-                        logger.info(f"✅ Added letter '{letter}' to word: {self.current_word}")
-            else:
-                self.last_letter = letter
-                self.letter_seen_start = current_time
-                self.letter_confirmed = False
-                self.last_letter_time = current_time
-    
-    def _complete_word(self):
-        with self.lock:
-            if self.current_word:
-                self.words.append(self.current_word)
-                
-                global _word_history
-                with _state_lock:
-                    _word_history.append(self.current_word)
-                    if len(_word_history) > 20:
-                        _word_history.pop(0)
-                
-                logger.info(f"📝 Word completed: '{self.current_word}'")
-                
-                self.current_word = ""
-                self.last_letter = ""
-                self.letter_confirmed = False
-                
-                global _current_word
-                with _state_lock:
-                    _current_word = ""
-    
-    def clear_current_word(self):
-        with self.lock:
-            self.current_word = ""
-            self.last_letter = ""
-            self.letter_confirmed = False
-            
-            global _current_word
-            with _state_lock:
-                _current_word = ""
-    
-    def delete_last_letter(self):
-        with self.lock:
-            if self.current_word:
-                self.current_word = self.current_word[:-1]
-                self.last_letter = ""
-                self.letter_confirmed = False
-                
-                global _current_word
-                with _state_lock:
-                    _current_word = self.current_word
-    
-    def get_current_word(self) -> str:
-        with self.lock:
-            return self.current_word
-    
-    def get_words(self) -> List[str]:
-        with self.lock:
-            return self.words.copy()
+    def clear(self):
+        self.predictions.clear()
+        self.confidences.clear()
 
 
 class VideoCamera:
-    """Enhanced video camera with ASL detection - SIMPLIFIED"""
+    """Enhanced video camera with ASL detection - Letters Only"""
     
-    def __init__(self):
-        logger.info("🎥 Initializing enhanced VideoCamera...")
+    def __init__(self, socketio=None, room=None):
+        logger.info("🎥 Initializing VideoCamera for letter detection...")
         
         self.cap: Optional[cv2.VideoCapture] = None
         self.hands: Optional[Any] = None
         self.is_running = False
         self.frame_count = 0
-        self.process_every_n_frames = 3  # Process every 3rd frame
+        self.process_every_n_frames = 2
+        self.last_gc_time = time.time()
+        self.last_successful_frame_time = time.time()
+        
+        # Socket.IO integration
+        self.socketio = socketio
+        self.room = room
         
         self._initialize_camera()
         self._initialize_mediapipe()
@@ -587,30 +480,28 @@ class VideoCamera:
             min_confidence=0.75,
             consensus_threshold=0.60
         )
-        self.word_builder = WordBuilder(
-            letter_hold_time=1.2,
-            space_delay=2.5,
-            min_confidence=0.80
-        )
         
         self.last_label = ""
         self.last_conf = 0.0
+        self.detection_count = 0
         
-        logger.info("✅ Enhanced VideoCamera initialized")
+        # Thread for processing
+        self.processing_thread = None
+        
+        logger.info("✅ VideoCamera initialized for letter detection")
 
     def _initialize_camera(self):
-        """Initialize camera"""
         for idx in [0, 1, -1]:
             try:
-                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)  # DirectShow for Windows
+                cap = cv2.VideoCapture(idx)
                 if cap.isOpened():
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                     cap.set(cv2.CAP_PROP_FPS, 30)
                     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    time.sleep(0.2)
                     
-                    # Flush initial frames
-                    for _ in range(5):
+                    for _ in range(10):
                         cap.read()
                     
                     success, _ = cap.read()
@@ -625,201 +516,241 @@ class VideoCamera:
         raise RuntimeError("❌ No camera available")
 
     def _initialize_mediapipe(self):
-        """Initialize MediaPipe"""
-        self.hands = mp_hands.Hands(
-            static_image_mode=False,
-            model_complexity=0,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
-            max_num_hands=1
-        )
+        try:
+            self.hands = mp_hands.Hands(
+                static_image_mode=False,
+                model_complexity=0,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+                max_num_hands=1
+            )
+            logger.info("✅ MediaPipe initialized")
+        except Exception as e:
+            logger.error(f"❌ MediaPipe initialization failed: {e}")
+            raise
 
-    def get_frame(self):
-        """Generate frames with sign detection"""
-        global _latest_label
-        
-        if not self.cap:
+    def start_detection(self):
+        """Start detection in background thread"""
+        if self.is_running:
+            logger.warning("⚠️ Detection already running")
             return
         
         self.is_running = True
+        self.processing_thread = threading.Thread(target=self._detection_loop, daemon=True)
+        self.processing_thread.start()
+        
+        logger.info("▶️ Detection thread started")
+
+    def _detection_loop(self):
+        """Main detection loop that emits frames via Socket.IO"""
+        global _latest_label, _detection_count
+        
+        consecutive_failures = 0
+        max_consecutive_failures = 30
+        last_detected_letter = ""
+        
+        logger.info("▶️ Starting detection loop")
         
         while self.is_running:
             try:
+                if not self.cap or not self.cap.isOpened():
+                    logger.error("❌ Camera closed unexpectedly")
+                    break
+                
                 success, frame = self.cap.read()
+                
                 if not success:
-                    logger.warning("⚠️ Failed to read frame")
-                    time.sleep(0.05)
+                    consecutive_failures += 1
+                    logger.warning(f"⚠️ Failed to read frame (consecutive failures: {consecutive_failures})")
+                    
+                    if consecutive_failures >= max_consecutive_failures:
+                        logger.error("❌ Too many consecutive failures - stopping")
+                        break
+                    
+                    time.sleep(0.1)
                     continue
                 
+                consecutive_failures = 0
                 self.frame_count += 1
+                self.last_successful_frame_time = time.time()
+                
+                if self.frame_count % 100 == 0:
+                    logger.info(f"✅ Frame {self.frame_count} processed successfully")
+                
                 frame = cv2.flip(frame, 1)
                 
-                # Process every Nth frame
+                current_time = time.time()
+                if current_time - self.last_gc_time > 15.0:
+                    gc.collect()
+                    self.last_gc_time = current_time
+                
                 should_process = (self.frame_count % self.process_every_n_frames == 0)
                 
                 if should_process:
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    
-                    if self.hands is not None:
+                    try:
+                        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         results = self.hands.process(rgb)
-                    else:
-                        results = None
-                    
-                    # Process detection results
-                    if results is not None and hasattr(results, 'multi_hand_landmarks') and results.multi_hand_landmarks:
-                        # Draw landmarks
-                        for handLms in results.multi_hand_landmarks:
-                            mp_drawing.draw_landmarks(
-                                frame, handLms, 
-                                mp_hands.HAND_CONNECTIONS,
-                                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
-                                mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2)
-                            )
                         
-                        landmarks = results.multi_hand_landmarks[0].landmark
-                        current_label, current_conf = self.recognizer.recognize(landmarks)
+                        if results is not None and hasattr(results, 'multi_hand_landmarks') and results.multi_hand_landmarks:
+                            for handLms in results.multi_hand_landmarks:
+                                mp_drawing.draw_landmarks(
+                                    frame, handLms, 
+                                    mp_hands.HAND_CONNECTIONS,
+                                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
+                                    mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2)
+                                )
+                            
+                            landmarks = results.multi_hand_landmarks[0].landmark
+                            current_label, current_conf = self.recognizer.recognize(landmarks)
+                            
+                            if current_label and current_conf > 0.70:
+                                self.smoother.add_prediction(current_label, current_conf)
+                                self.last_label = current_label
+                                self.last_conf = current_conf
+                        else:
+                            self.smoother.add_prediction("", 0.0)
+                            self.last_label = ""
+                            self.last_conf = 0.0
                         
-                        if current_label and current_conf > 0.70:
-                            self.smoother.add_prediction(current_label, current_conf)
-                            self.last_label = current_label
-                            self.last_conf = current_conf
-                    else:
-                        self.smoother.add_prediction("", 0.0)
-                        self.last_label = ""
-                        self.last_conf = 0.0
-                    
-                    label, conf = self.smoother.get_stable_prediction()
-                    self.word_builder.add_letter(label, conf)
-                    
-                    # Update global state
-                    with _state_lock:
-                        _latest_label = (label, conf)
+                        label, conf = self.smoother.get_stable_prediction()
+                        
+                        # Count unique letter detections
+                        if label and label != last_detected_letter and conf > 0.80:
+                            self.detection_count += 1
+                            last_detected_letter = label
+                            logger.info(f"✅ Detected letter '{label}' with confidence {conf:.2%}")
+                            
+                            with _state_lock:
+                                _detection_count = self.detection_count
+                        
+                        with _state_lock:
+                            _latest_label = (label, conf)
+                    except Exception as e:
+                        logger.error(f"❌ MediaPipe processing error: {e}")
+                        label, conf = "", 0.0
                 else:
-                    # Reuse last detection
                     label, conf = self.last_label, self.last_conf
                 
-                # Always draw UI
-                current_word = self.word_builder.get_current_word()
-                word_history = self.word_builder.get_words()
-                self._draw_ui(frame, label, conf, current_word, word_history)
+                self._draw_ui(frame, label, conf, self.detection_count)
                 
-                # Encode frame
-                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                if ret:
-                    yield (b'--frame\r\n'
-                          b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+                # Encode frame to base64 and emit via Socket.IO
+                if self.socketio and self.room:
+                    try:
+                        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                        
+                        # Emit frame and detection state together
+                        self.socketio.emit('video_frame', {
+                            'image': frame_base64,
+                            'label': label,
+                            'confidence': float(conf),
+                            'detection_count': self.detection_count
+                        }, room=self.room)
+                    except Exception as e:
+                        logger.error(f"❌ Socket.IO emit error: {e}")
+                
+                time.sleep(0.033)  # ~30 FPS
                        
-            except GeneratorExit:
-                logger.info("Generator exit - stopping")
-                break
             except Exception as e:
-                logger.error(f"Frame error: {e}")
+                logger.error(f"❌ Detection loop error: {e}", exc_info=True)
+                consecutive_failures += 1
+                if consecutive_failures >= max_consecutive_failures:
+                    logger.error("❌ Too many errors - stopping")
+                    break
                 time.sleep(0.1)
         
         self.is_running = False
-        logger.info("Frame generation stopped")
+        logger.info("⏹️ Detection loop stopped")
 
-    def _draw_ui(self, frame: np.ndarray, label: str, conf: float, current_word: str, word_history: List[str]):
-        """Draw UI overlay"""
+    def _draw_ui(self, frame: np.ndarray, label: str, conf: float, detection_count: int):
         h, w = frame.shape[:2]
         
-        # Top bar
+        # Top banner - Current detection
         overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (w, 100), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (0, 0), (w, 120), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
         
         if label and conf > 0.70:
-            cv2.putText(frame, f"Letter: {label}", (15, 45), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.3, (0, 255, 0), 3)
+            cv2.putText(frame, f"Detected: {label}", (15, 50), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
             
+            # Confidence bar
             bar_width = int(350 * conf)
-            cv2.rectangle(frame, (15, 65), (365, 85), (50, 50, 50), -1)
-            cv2.rectangle(frame, (15, 65), (15 + bar_width, 85), (0, 255, 0), -1)
-            cv2.putText(frame, f"{conf:.0%}", (375, 78), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            cv2.rectangle(frame, (15, 75), (365, 100), (50, 50, 50), -1)
+            cv2.rectangle(frame, (15, 75), (15 + bar_width, 100), (0, 255, 0), -1)
+            cv2.putText(frame, f"{conf:.0%}", (375, 93), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
         else:
-            cv2.putText(frame, "Show ASL letter...", (15, 50), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2)
+            cv2.putText(frame, "Show ASL letter...", (15, 60), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (200, 200, 200), 2)
         
-        # Middle - Current word
+        # Bottom banner - Stats
         overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 110), (w, 200), (40, 40, 40), -1)
-        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        cv2.rectangle(overlay, (0, h - 80), (w, h), (20, 20, 20), -1)
+        cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
         
-        cv2.putText(frame, "Current Word:", (15, 140), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 200, 255), 2)
-        
-        if current_word:
-            word_display = current_word
-            if len(word_display) > 25:
-                word_display = word_display[-25:]
-            cv2.putText(frame, word_display, (15, 180), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 2)
-        else:
-            cv2.putText(frame, "(hold letter 1.2s)", (15, 180), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (150, 150, 150), 1)
-        
-        # Bottom - Word history
-        if word_history:
-            overlay = frame.copy()
-            cv2.rectangle(overlay, (0, h - 120), (w, h), (20, 20, 20), -1)
-            cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
-            
-            cv2.putText(frame, "Completed Words:", (15, h - 90), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 255, 100), 2)
-            
-            recent_words = word_history[-3:]
-            words_text = " | ".join(recent_words)
-            
-            if len(words_text) > 45:
-                words_text = "..." + words_text[-42:]
-            
-            cv2.putText(frame, words_text, (15, h - 55), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            
-            cv2.putText(frame, f"Total: {len(word_history)} words", (15, h - 20), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+        cv2.putText(frame, f"Total Detections: {detection_count}", (15, h - 40), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (100, 200, 255), 2)
         
         # Instructions
         instructions = [
-            "Hold letter 1.2s to add",
-            "Pause 2.5s for word end",
-            "Use buttons to control"
+            "Hold letter steady for detection",
+            "Good lighting improves accuracy"
         ]
         
-        y_offset = 15
+        y_offset = 20
         for instruction in instructions:
-            cv2.putText(frame, instruction, (w - 270, y_offset), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-            y_offset += 18
+            cv2.putText(frame, instruction, (w - 350, y_offset), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+            y_offset += 22
 
-    def clear_current_word(self):
-        """Clear current word"""
-        self.word_builder.clear_current_word()
-        logger.info("🗑️ Current word cleared")
-    
-    def delete_last_letter(self):
-        """Delete last letter"""
-        self.word_builder.delete_last_letter()
-        logger.info("⌫ Last letter deleted")
+    def reset_count(self):
+        """Reset detection counter"""
+        self.detection_count = 0
+        global _detection_count
+        with _state_lock:
+            _detection_count = 0
+        logger.info("🔄 Detection count reset")
 
     def stop(self):
-        """Stop camera"""
         logger.info("🛑 Stopping camera...")
         self.is_running = False
-        time.sleep(0.2)
-
-    def __del__(self):
-        """Cleanup"""
-        self.is_running = False
-        if self.cap:
+        
+        if self.processing_thread:
+            self.processing_thread.join(timeout=2.0)
+        
+        if self.hands is not None:
+            try:
+                self.hands.close()
+                self.hands = None
+                logger.info("✅ MediaPipe hands closed")
+            except Exception as e:
+                logger.error(f"❌ Error closing MediaPipe: {e}")
+        
+        if self.cap is not None:
             try:
                 self.cap.release()
-            except:
-                pass
+                self.cap = None
+                logger.info("✅ Camera released")
+            except Exception as e:
+                logger.error(f"❌ Error releasing camera: {e}")
+        
+        gc.collect()
+        logger.info("✅ Stop complete")
+
+    def __del__(self):
+        self.is_running = False
+        
         if self.hands:
             try:
                 self.hands.close()
             except:
                 pass
-        logger.info("✅ Cleanup complete")
+        
+        if self.cap:
+            try:
+                self.cap.release()
+            except:
+                pass
+        
+        gc.collect()
