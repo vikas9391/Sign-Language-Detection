@@ -15,10 +15,6 @@ except ImportError as e:
     MEDIAPIPE_AVAILABLE = False
     raise ImportError("MediaPipe not installed. Run: pip install mediapipe") from e
 
-# Optional TTS - disabled by default to prevent freezing
-TTS_AVAILABLE = False
-pyttsx3 = None
-
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -49,7 +45,7 @@ def get_word_history() -> List[str]:
 
 
 class ASLRecognizer:
-    """Complete ASL alphabet recognizer (A-Z) with improved accuracy"""
+    """Complete ASL alphabet recognizer (A-Z)"""
     
     def __init__(self):
         self.finger_tips = [4, 8, 12, 16, 20]
@@ -63,7 +59,7 @@ class ASLRecognizer:
         
         extended = self._get_extended_fingers(landmarks)
         
-        # Check each letter with priority order (most distinct first)
+        # Check each letter with priority order
         checks = [
             ("Y", self._is_letter_y, landmarks, extended),
             ("I", self._is_letter_i, extended, landmarks),
@@ -101,17 +97,17 @@ class ASLRecognizer:
         return "", 0.0
     
     def _get_extended_fingers(self, landmarks: Any) -> List[bool]:
-        """Determine which fingers are extended with better thresholds"""
+        """Determine which fingers are extended"""
         extended = []
         wrist = landmarks[0]
         
-        # Thumb - check horizontal extension
+        # Thumb
         thumb_tip = landmarks[4]
         thumb_mcp = landmarks[2]
         thumb_extended = abs(thumb_tip.x - wrist.x) > abs(thumb_mcp.x - wrist.x) + 0.02
         extended.append(thumb_extended)
         
-        # Other fingers - check vertical extension
+        # Other fingers
         for i in range(1, 5):
             tip = landmarks[self.finger_tips[i]]
             mcp = landmarks[self.finger_mcps[i]]
@@ -124,10 +120,8 @@ class ASLRecognizer:
         """Calculate 2D distance"""
         return float(np.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2))
     
-    # Letter Recognition Methods
-    
+    # All letter recognition methods
     def _is_letter_a(self, extended: List[bool], landmarks: Any) -> float:
-        """A - Closed fist with thumb alongside"""
         if not any(extended[1:5]) and extended[0]:
             thumb_tip = landmarks[4]
             index_mcp = landmarks[5]
@@ -137,7 +131,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_b(self, extended: List[bool], landmarks: Any) -> float:
-        """B - Four fingers up, thumb tucked"""
         if all(extended[1:5]) and not extended[0]:
             tips_aligned = all(
                 abs(landmarks[self.finger_tips[i]].y - landmarks[self.finger_tips[i+1]].y) < 0.05
@@ -147,7 +140,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_c(self, landmarks: Any) -> float:
-        """C - Curved hand forming C shape"""
         thumb_tip = landmarks[4]
         index_tip = landmarks[8]
         gap = self._distance(thumb_tip, index_tip)
@@ -163,7 +155,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_d(self, landmarks: Any, extended: List[bool]) -> float:
-        """D - Index up, others form circle with thumb"""
         if extended[1] and not any(extended[2:5]):
             thumb_tip = landmarks[4]
             middle_tip = landmarks[12]
@@ -175,7 +166,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_e(self, landmarks: Any) -> float:
-        """E - All fingers tightly curled"""
         all_curled = all(
             landmarks[self.finger_tips[i]].y > landmarks[self.finger_mcps[i]].y - 0.02
             for i in range(1, 5)
@@ -190,7 +180,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_f(self, landmarks: Any, extended: List[bool]) -> float:
-        """F - OK sign with three fingers up"""
         if extended[2] and extended[3] and extended[4]:
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -201,7 +190,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_g(self, landmarks: Any, extended: List[bool]) -> float:
-        """G - Thumb and index pointing horizontally"""
         if extended[0] and extended[1] and not any(extended[2:5]):
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -214,7 +202,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_h(self, landmarks: Any, extended: List[bool]) -> float:
-        """H - Index and middle pointing horizontally together"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             index_tip = landmarks[8]
             middle_tip = landmarks[12]
@@ -227,7 +214,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_i(self, extended: List[bool], landmarks: Any) -> float:
-        """I - Pinky up, other fingers in fist"""
         if extended[4] and not any(extended[0:4]):
             fist_formed = all(
                 landmarks[self.finger_tips[i]].y > landmarks[self.finger_mcps[i]].y - 0.05
@@ -239,13 +225,11 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_j(self, landmarks: Any, extended: List[bool]) -> float:
-        """J - Like I (pinky up)"""
         if extended[4] and not any(extended[0:4]):
             return 0.86
         return 0.0
     
     def _is_letter_k(self, landmarks: Any, extended: List[bool]) -> float:
-        """K - Index and middle up in V, thumb between"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             thumb_tip = landmarks[4]
             index_base = landmarks[5]
@@ -258,7 +242,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_l(self, landmarks: Any, extended: List[bool]) -> float:
-        """L - Thumb and index perpendicular"""
         if extended[0] and extended[1] and not any(extended[2:5]):
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -278,7 +261,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_m(self, landmarks: Any, extended: List[bool]) -> float:
-        """M - Three fingers draped over thumb"""
         if not any(extended[3:5]):
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -292,7 +274,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_n(self, landmarks: Any, extended: List[bool]) -> float:
-        """N - Two fingers draped over thumb"""
         if not any(extended[2:5]):
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -304,7 +285,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_o(self, landmarks: Any) -> float:
-        """O - All fingertips form circle"""
         thumb_tip = landmarks[4]
         index_tip = landmarks[8]
         
@@ -319,7 +299,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_p(self, landmarks: Any, extended: List[bool]) -> float:
-        """P - Like K but pointing down"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             index_tip = landmarks[8]
             wrist = landmarks[0]
@@ -329,7 +308,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_q(self, landmarks: Any, extended: List[bool]) -> float:
-        """Q - Like G but pointing down"""
         if extended[0] and extended[1] and not any(extended[2:5]):
             thumb_tip = landmarks[4]
             index_tip = landmarks[8]
@@ -340,7 +318,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_r(self, landmarks: Any, extended: List[bool]) -> float:
-        """R - Index and middle crossed"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             index_tip = landmarks[8]
             middle_tip = landmarks[12]
@@ -355,7 +332,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_s(self, landmarks: Any, extended: List[bool]) -> float:
-        """S - Fist with thumb across fingers"""
         if not any(extended[1:5]):
             thumb_tip = landmarks[4]
             index_mcp = landmarks[5]
@@ -367,7 +343,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_t(self, landmarks: Any, extended: List[bool]) -> float:
-        """T - Thumb between index and middle"""
         if not any(extended[1:5]):
             thumb_tip = landmarks[4]
             index_pip = landmarks[6]
@@ -379,7 +354,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_u(self, landmarks: Any, extended: List[bool]) -> float:
-        """U - Index and middle up together"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             index_tip = landmarks[8]
             middle_tip = landmarks[12]
@@ -391,7 +365,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_v(self, landmarks: Any, extended: List[bool]) -> float:
-        """V - Peace sign"""
         if extended[1] and extended[2] and not extended[3] and not extended[4]:
             index_tip = landmarks[8]
             middle_tip = landmarks[12]
@@ -405,7 +378,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_w(self, landmarks: Any, extended: List[bool]) -> float:
-        """W - Index, middle, ring up and separated"""
         if extended[1] and extended[2] and extended[3] and not extended[4]:
             index_tip = landmarks[8]
             middle_tip = landmarks[12]
@@ -422,7 +394,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_x(self, landmarks: Any, extended: List[bool]) -> float:
-        """X - Index bent into hook"""
         if not any(extended[2:5]) and not extended[0]:
             index_tip = landmarks[8]
             index_mcp = landmarks[5]
@@ -434,7 +405,6 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_y(self, landmarks: Any, extended: List[bool]) -> float:
-        """Y - Thumb and pinky extended"""
         if extended[0] and extended[4] and not any(extended[1:4]):
             thumb_tip = landmarks[4]
             pinky_tip = landmarks[20]
@@ -445,14 +415,13 @@ class ASLRecognizer:
         return 0.0
     
     def _is_letter_z(self, landmarks: Any, extended: List[bool]) -> float:
-        """Z - Index extended"""
         if extended[1] and not any(extended[2:5]):
             return 0.84
         return 0.0
 
 
 class PredictionSmoother:
-    """Advanced smoothing with better stability"""
+    """Advanced smoothing"""
     
     def __init__(self, window_size: int = 12, min_confidence: float = 0.75, consensus_threshold: float = 0.65):
         self.predictions: deque = deque(maxlen=window_size)
@@ -462,12 +431,10 @@ class PredictionSmoother:
         self.consensus_threshold = consensus_threshold
         
     def add_prediction(self, label: str, confidence: float):
-        """Add prediction to buffer"""
         self.predictions.append(label)
         self.confidences.append(confidence)
         
     def get_stable_prediction(self) -> Tuple[str, float]:
-        """Get most stable prediction"""
         if len(self.predictions) < 6:
             return "", 0.0
         
@@ -514,7 +481,6 @@ class WordBuilder:
         self.lock = threading.Lock()
         
     def add_letter(self, letter: str, confidence: float):
-        """Add a letter with debouncing"""
         current_time = time.time()
         
         with self.lock:
@@ -550,7 +516,6 @@ class WordBuilder:
                 self.last_letter_time = current_time
     
     def _complete_word(self):
-        """Complete current word"""
         with self.lock:
             if self.current_word:
                 self.words.append(self.current_word)
@@ -572,7 +537,6 @@ class WordBuilder:
                     _current_word = ""
     
     def clear_current_word(self):
-        """Clear current word"""
         with self.lock:
             self.current_word = ""
             self.last_letter = ""
@@ -583,7 +547,6 @@ class WordBuilder:
                 _current_word = ""
     
     def delete_last_letter(self):
-        """Delete last letter"""
         with self.lock:
             if self.current_word:
                 self.current_word = self.current_word[:-1]
@@ -595,18 +558,16 @@ class WordBuilder:
                     _current_word = self.current_word
     
     def get_current_word(self) -> str:
-        """Get current word"""
         with self.lock:
             return self.current_word
     
     def get_words(self) -> List[str]:
-        """Get completed words"""
         with self.lock:
             return self.words.copy()
 
 
 class VideoCamera:
-    """Enhanced video camera with ASL detection - OPTIMIZED"""
+    """Enhanced video camera with ASL detection - SIMPLIFIED"""
     
     def __init__(self):
         logger.info("🎥 Initializing enhanced VideoCamera...")
@@ -615,16 +576,16 @@ class VideoCamera:
         self.hands: Optional[Any] = None
         self.is_running = False
         self.frame_count = 0
-        self.process_every_n_frames = 2  # **Process every 2nd frame for better performance**
+        self.process_every_n_frames = 3  # Process every 3rd frame
         
         self._initialize_camera()
         self._initialize_mediapipe()
         
         self.recognizer = ASLRecognizer()
         self.smoother = PredictionSmoother(
-            window_size=12, 
+            window_size=10, 
             min_confidence=0.75,
-            consensus_threshold=0.65
+            consensus_threshold=0.60
         )
         self.word_builder = WordBuilder(
             letter_hold_time=1.2,
@@ -632,25 +593,25 @@ class VideoCamera:
             min_confidence=0.80
         )
         
-        self.last_spoken_letter = ""
-        self.last_processed_frame = None  # Cache last result
         self.last_label = ""
         self.last_conf = 0.0
         
         logger.info("✅ Enhanced VideoCamera initialized")
 
     def _initialize_camera(self):
-        """Initialize camera with optimal settings"""
+        """Initialize camera"""
         for idx in [0, 1, -1]:
             try:
-                cap = cv2.VideoCapture(idx)
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)  # DirectShow for Windows
                 if cap.isOpened():
-                    # Optimize camera settings for performance
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                     cap.set(cv2.CAP_PROP_FPS, 30)
-                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize buffer to reduce lag
-                    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))  # Use MJPEG for better performance
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    
+                    # Flush initial frames
+                    for _ in range(5):
+                        cap.read()
                     
                     success, _ = cap.read()
                     if success:
@@ -664,17 +625,17 @@ class VideoCamera:
         raise RuntimeError("❌ No camera available")
 
     def _initialize_mediapipe(self):
-        """Initialize MediaPipe with optimized settings"""
+        """Initialize MediaPipe"""
         self.hands = mp_hands.Hands(
             static_image_mode=False,
-            model_complexity=0,  # **Use faster model (was 1)**
-            min_detection_confidence=0.5,  # **Slightly lower for better detection (was 0.6)**
-            min_tracking_confidence=0.5,  # **Slightly lower for smoother tracking (was 0.6)**
+            model_complexity=0,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
             max_num_hands=1
         )
 
     def get_frame(self):
-        """Generate frames with sign detection - OPTIMIZED"""
+        """Generate frames with sign detection"""
         global _latest_label
         
         if not self.cap:
@@ -686,14 +647,14 @@ class VideoCamera:
             try:
                 success, frame = self.cap.read()
                 if not success:
-                    logger.warning("Failed to read frame")
+                    logger.warning("⚠️ Failed to read frame")
                     time.sleep(0.05)
                     continue
                 
                 self.frame_count += 1
                 frame = cv2.flip(frame, 1)
                 
-                # **OPTIMIZATION: Process only every Nth frame for detection**
+                # Process every Nth frame
                 should_process = (self.frame_count % self.process_every_n_frames == 0)
                 
                 if should_process:
@@ -734,22 +695,22 @@ class VideoCamera:
                     with _state_lock:
                         _latest_label = (label, conf)
                 else:
-                    # **Reuse last detection result to avoid unnecessary processing**
+                    # Reuse last detection
                     label, conf = self.last_label, self.last_conf
                 
-                # Always draw UI (even on skipped frames)
+                # Always draw UI
                 current_word = self.word_builder.get_current_word()
                 word_history = self.word_builder.get_words()
                 self._draw_ui(frame, label, conf, current_word, word_history)
                 
-                # Encode with lower quality for better performance
-                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])  # **Reduced from 85**
+                # Encode frame
+                ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if ret:
                     yield (b'--frame\r\n'
                           b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
                        
             except GeneratorExit:
-                logger.info("Generator exit - stopping frame generation")
+                logger.info("Generator exit - stopping")
                 break
             except Exception as e:
                 logger.error(f"Frame error: {e}")
@@ -759,10 +720,10 @@ class VideoCamera:
         logger.info("Frame generation stopped")
 
     def _draw_ui(self, frame: np.ndarray, label: str, conf: float, current_word: str, word_history: List[str]):
-        """Draw UI overlay - OPTIMIZED (same as before but cached where possible)"""
+        """Draw UI overlay"""
         h, w = frame.shape[:2]
         
-        # Top bar - Current letter detection
+        # Top bar
         overlay = frame.copy()
         cv2.rectangle(overlay, (0, 0), (w, 100), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
