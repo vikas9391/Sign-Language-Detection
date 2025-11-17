@@ -7,13 +7,14 @@ from datetime import datetime
 from db_setup import db, migrate
 from models.user_model import User
 import logging
+from typing import Optional
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Global socketio instance for easy access
-socketio = None
+socketio: Optional[SocketIO] = None
 
 
 def create_app() -> Flask:
@@ -85,14 +86,14 @@ def create_app() -> Flask:
 
     # Login Manager configuration
     login_manager = LoginManager()
-    login_manager.login_view = "auth.login"
+    login_manager.login_view = "auth.login"  # type: ignore[assignment]
     login_manager.login_message = "Please log in to access this page."
     login_manager.login_message_category = "info"
     login_manager.session_protection = "strong"  # Enhanced session protection
     login_manager.init_app(app)
 
     @login_manager.user_loader
-    def load_user(user_id: str):
+    def load_user(user_id: str) -> Optional[User]:
         """Load user by ID for Flask-Login"""
         try:
             return User.query.get(int(user_id))
@@ -158,7 +159,7 @@ def create_app() -> Flask:
             # Attempt to reconnect
             try:
                 db.session.remove()
-            except:
+            except Exception:
                 pass
 
     # Error handlers
@@ -231,7 +232,8 @@ def create_app() -> Flask:
             logger.error(f"Failed to create database tables: {e}")
 
     # Store socketio instance in app for access in routes
-    app.socketio = socketio
+    # Use setattr to avoid type checker warnings about dynamic attributes
+    setattr(app, 'socketio', socketio)
 
     return app
 
@@ -247,6 +249,11 @@ if __name__ == "__main__":
     debug = os.getenv("FLASK_ENV", "development") == "development"
     
     logger.info(f"Starting Flask app with Socket.IO on {host}:{port} (debug={debug})")
+    
+    # Ensure socketio is initialized before running
+    if socketio is None:
+        logger.error("Socket.IO not initialized!")
+        raise RuntimeError("Socket.IO instance is None")
     
     # Use socketio.run instead of app.run
     socketio.run(

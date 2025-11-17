@@ -87,6 +87,26 @@
     font-size: 0.95rem;
   }
 
+  .hands-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 8px;
+    border: 2px solid var(--primary-color);
+    margin-top: 0.5rem;
+  }
+
+  .hands-indicator.active {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: var(--success-color);
+  }
+
+  .hand-icon {
+    font-size: 1.5rem;
+  }
+
   .action-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -193,6 +213,19 @@
     font-weight: 600;
   }
 
+  .feature-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--success-color), #059669);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: 0.5rem;
+  }
+
   @media (max-width: 992px) {
     #videoContainer {
       min-height: 320px;
@@ -218,6 +251,7 @@
         <div class="card-header">
           <span class="status-indicator status-inactive" id="statusIndicator"></span>
           Live Detection Feed
+          <span class="feature-badge">2-Hand Support</span>
         </div>
         <div class="card-body text-center">
           <div id="videoContainer">
@@ -226,8 +260,15 @@
             </div>
             <img id="video" class="img-fluid d-none" alt="video feed" />
           </div>
+          
+          <!-- Hands Detection Indicator -->
+          <div class="hands-indicator" id="handsIndicator">
+            <span class="hand-icon">🖐️</span>
+            <span id="handsText">No hands detected</span>
+          </div>
+          
           <div class="help-text">
-            💡 <strong>Tips:</strong> Position your hand clearly in frame • Hold each letter steady • Ensure good lighting for better accuracy
+            💡 <strong>Tips:</strong> Use 1 or 2 hands • Position clearly in frame • Hold each letter steady • Ensure good lighting for better accuracy
           </div>
         </div>
       </div>
@@ -278,8 +319,9 @@
             <h6 class="fw-bold mb-2">📋 How to Use:</h6>
             <ul class="mb-0" style="font-size: 0.9rem; color: var(--text-secondary);">
               <li>Click "Start Detection" to begin</li>
-              <li>Show ASL letters to the camera</li>
+              <li>Show ASL letters with 1 or 2 hands</li>
               <li>Hold each letter steady for recognition</li>
+              <li>System supports up to 2 hands simultaneously</li>
               <li>View your total detections</li>
               <li>Use "Reset Count" to start over</li>
             </ul>
@@ -330,10 +372,13 @@
   const detectionCount = document.getElementById('detectionCount');
   const resetBtn = document.getElementById('resetBtn');
   const speakBtn = document.getElementById('speakBtn');
+  const handsIndicator = document.getElementById('handsIndicator');
+  const handsText = document.getElementById('handsText');
 
   let detectionActive = false;
   let lastDetectedLabel = '';
   let currentLabel = '';
+  let currentNumHands = 0;
 
   // Socket.IO event handlers
   socket.on('connect', () => {
@@ -425,6 +470,28 @@
     if (data.detection_count !== undefined) {
       detectionCount.textContent = data.detection_count;
     }
+    
+    // Update hands indicator
+    if (data.num_hands !== undefined) {
+      currentNumHands = data.num_hands;
+      updateHandsIndicator(data.num_hands);
+    }
+  }
+
+  function updateHandsIndicator(numHands) {
+    if (numHands === 0) {
+      handsIndicator.classList.remove('active');
+      handsText.textContent = 'No hands detected';
+    } else if (numHands === 1) {
+      handsIndicator.classList.add('active');
+      handsText.textContent = '1 hand detected ✓';
+    } else if (numHands === 2) {
+      handsIndicator.classList.add('active');
+      handsText.textContent = '2 hands detected ✓✓';
+    } else {
+      handsIndicator.classList.add('active');
+      handsText.textContent = `${numHands} hands detected`;
+    }
   }
 
   function resetUI() {
@@ -440,6 +507,9 @@
     speakBtn.disabled = true;
     letterDisplay.textContent = 'No sign detected';
     confidenceDisplay.textContent = '';
+    handsIndicator.classList.remove('active');
+    handsText.textContent = 'No hands detected';
+    currentNumHands = 0;
   }
 
   // Start detection

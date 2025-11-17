@@ -35,18 +35,35 @@ def get_detection_count() -> int:
 
 
 class ASLRecognizer:
-    """Complete ASL alphabet recognizer (A-Z)"""
+    """Complete ASL alphabet recognizer (A-Z) with two-hand support"""
     
     def __init__(self):
         self.finger_tips = [4, 8, 12, 16, 20]
         self.finger_pips = [3, 6, 10, 14, 18]
         self.finger_mcps = [2, 5, 9, 13, 17]
         
-    def recognize(self, landmarks: Any) -> Tuple[str, float]:
-        """Recognize ASL letter from hand landmarks"""
+    def recognize(self, landmarks: Any, all_landmarks: Optional[List[Any]] = None, 
+                  handedness_list: Optional[List[Any]] = None) -> Tuple[str, float]:
+        """Recognize ASL letter from hand landmarks
+        
+        Args:
+            landmarks: Primary hand landmarks (backwards compatible)
+            all_landmarks: List of all detected hands for two-hand gestures
+            handedness_list: List of handedness info (Left/Right) for each hand
+        """
         if landmarks is None or len(landmarks) != 21:
             return "", 0.0
         
+        # Check for two-hand gestures first if multiple hands detected
+        if all_landmarks and len(all_landmarks) >= 2:
+            two_hand_result = self._check_two_hand_letters(
+                all_landmarks, 
+                handedness_list
+            )
+            if two_hand_result[0]:
+                return two_hand_result
+        
+        # Fall back to single-hand detection
         extended = self._get_extended_fingers(landmarks)
         
         checks = [
@@ -82,6 +99,49 @@ class ASLRecognizer:
             confidence = check_func(*args)
             if confidence > 0.0:
                 return letter, float(confidence)
+        
+        return "", 0.0
+    
+    def _check_two_hand_letters(self, all_landmarks: List[Any], 
+                                handedness_list: Optional[List[Any]] = None) -> Tuple[str, float]:
+        """Check for letters that require two hands
+        
+        Some ASL letters can benefit from two-hand variations or confirmations.
+        This is a framework for adding specific two-hand patterns.
+        """
+        if len(all_landmarks) < 2:
+            return "", 0.0
+        
+        # Determine left and right hands
+        hand1 = all_landmarks[0]
+        hand2 = all_landmarks[1]
+        
+        # Use handedness info if available, otherwise use x-coordinate
+        if handedness_list and len(handedness_list) >= 2:
+            if handedness_list[0].classification[0].label == "Left":
+                left_hand = hand1
+                right_hand = hand2
+            else:
+                left_hand = hand2
+                right_hand = hand1
+        else:
+            # Fallback: determine by x-coordinate (left hand appears on right side of screen)
+            if hand1[0].x < hand2[0].x:
+                left_hand = hand1
+                right_hand = hand2
+            else:
+                left_hand = hand2
+                right_hand = hand1
+        
+        # Get extended fingers for both hands
+        left_extended = self._get_extended_fingers(left_hand)
+        right_extended = self._get_extended_fingers(right_hand)
+        
+        # Example: Two-hand confirmation for high-confidence detection
+        # You can add specific two-hand letters here
+        
+        # For now, return empty to allow single-hand detection
+        # Future additions: specific two-hand ASL patterns
         
         return "", 0.0
     
@@ -454,10 +514,10 @@ class PredictionSmoother:
 
 
 class VideoCamera:
-    """Enhanced video camera with ASL detection - Letters Only"""
+    """Enhanced video camera with ASL detection - 1 or 2 Hand Support"""
     
     def __init__(self, socketio=None, room=None):
-        logger.info("🎥 Initializing VideoCamera for letter detection...")
+        logger.info("🎥 Initializing VideoCamera for 1-2 hand letter detection...")
         
         self.cap: Optional[cv2.VideoCapture] = None
         self.hands: Optional[Any] = None
@@ -488,7 +548,7 @@ class VideoCamera:
         # Thread for processing
         self.processing_thread = None
         
-        logger.info("✅ VideoCamera initialized for letter detection")
+        logger.info("✅ VideoCamera initialized for 1-2 hand letter detection")
 
     def _initialize_camera(self):
         for idx in [0, 1, -1]:
@@ -522,9 +582,9 @@ class VideoCamera:
                 model_complexity=0,
                 min_detection_confidence=0.5,
                 min_tracking_confidence=0.5,
-                max_num_hands=1
+                max_num_hands=2  # Support 2 hands
             )
-            logger.info("✅ MediaPipe initialized")
+            logger.info("✅ MediaPipe initialized with 2-hand support")
         except Exception as e:
             logger.error(f"❌ MediaPipe initialization failed: {e}")
             raise
@@ -592,16 +652,35 @@ class VideoCamera:
                         results = self.hands.process(rgb)
                         
                         if results is not None and hasattr(results, 'multi_hand_landmarks') and results.multi_hand_landmarks:
-                            for handLms in results.multi_hand_landmarks:
+                            # Draw landmarks for all detected hands
+                            num_hands = len(results.multi_hand_landmarks)
+                            for idx, handLms in enumerate(results.multi_hand_landmarks):
+                                # Use different colors for left/right hands
+                                if num_hands > 1:
+                                    color = (0, 255, 0) if idx == 0 else (255, 165, 0)  # Green for first, orange for second
+                                else:
+                                    color = (0, 255, 0)
+                                
                                 mp_drawing.draw_landmarks(
                                     frame, handLms, 
                                     mp_hands.HAND_CONNECTIONS,
-                                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
+                                    mp_drawing.DrawingSpec(color=color, thickness=2, circle_radius=3),
                                     mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=2)
                                 )
                             
-                            landmarks = results.multi_hand_landmarks[0].landmark
-                            current_label, current_conf = self.recognizer.recognize(landmarks)
+                            # Get all hand landmarks and handedness for recognition
+                            all_landmarks = [hand.landmark for hand in results.multi_hand_landmarks]
+                            primary_landmarks = results.multi_hand_landmarks[0].landmark
+                            
+                            # Get handedness info if available
+                            handedness_list = results.multi_handedness if hasattr(results, 'multi_handedness') else None
+                            
+                            # Pass all information to recognizer
+                            current_label, current_conf = self.recognizer.recognize(
+                                primary_landmarks, 
+                                all_landmarks if len(all_landmarks) > 1 else None,
+                                handedness_list
+                            )
                             
                             if current_label and current_conf > 0.70:
                                 self.smoother.add_prediction(current_label, current_conf)
@@ -631,7 +710,10 @@ class VideoCamera:
                 else:
                     label, conf = self.last_label, self.last_conf
                 
-                self._draw_ui(frame, label, conf, self.detection_count)
+                # Get number of hands detected for UI
+                num_hands = len(results.multi_hand_landmarks) if (results and hasattr(results, 'multi_hand_landmarks') and results.multi_hand_landmarks) else 0
+                
+                self._draw_ui(frame, label, conf, self.detection_count, num_hands)
                 
                 # Encode frame to base64 and emit via Socket.IO
                 if self.socketio and self.room:
@@ -644,7 +726,8 @@ class VideoCamera:
                             'image': frame_base64,
                             'label': label,
                             'confidence': float(conf),
-                            'detection_count': self.detection_count
+                            'detection_count': self.detection_count,
+                            'num_hands': num_hands
                         }, room=self.room)
                     except Exception as e:
                         logger.error(f"❌ Socket.IO emit error: {e}")
@@ -662,12 +745,12 @@ class VideoCamera:
         self.is_running = False
         logger.info("⏹️ Detection loop stopped")
 
-    def _draw_ui(self, frame: np.ndarray, label: str, conf: float, detection_count: int):
+    def _draw_ui(self, frame: np.ndarray, label: str, conf: float, detection_count: int, num_hands: int = 0):
         h, w = frame.shape[:2]
         
         # Top banner - Current detection
         overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (w, 120), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (0, 0), (w, 140), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.65, frame, 0.35, 0, frame)
         
         if label and conf > 0.70:
@@ -680,9 +763,20 @@ class VideoCamera:
             cv2.rectangle(frame, (15, 75), (15 + bar_width, 100), (0, 255, 0), -1)
             cv2.putText(frame, f"{conf:.0%}", (375, 93), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
+            
+            # Hand count indicator
+            hand_color = (0, 255, 0) if num_hands > 0 else (100, 100, 100)
+            cv2.putText(frame, f"Hands: {num_hands}", (15, 125), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, hand_color, 2)
         else:
             cv2.putText(frame, "Show ASL letter...", (15, 60), 
                        cv2.FONT_HERSHEY_SIMPLEX, 1.2, (200, 200, 200), 2)
+            
+            # Hand count indicator
+            if num_hands > 0:
+                hand_color = (0, 255, 0) if num_hands <= 2 else (255, 165, 0)
+                cv2.putText(frame, f"Hands detected: {num_hands}", (15, 100), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, hand_color, 2)
         
         # Bottom banner - Stats
         overlay = frame.copy()
@@ -694,13 +788,13 @@ class VideoCamera:
         
         # Instructions
         instructions = [
-            "Hold letter steady for detection",
+            "1 or 2 hands supported | Hold steady",
             "Good lighting improves accuracy"
         ]
         
         y_offset = 20
         for instruction in instructions:
-            cv2.putText(frame, instruction, (w - 350, y_offset), 
+            cv2.putText(frame, instruction, (w - 420, y_offset), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
             y_offset += 22
 
